@@ -1,0 +1,107 @@
+[
+  {
+    "id": "kawayan-tinik",
+    "name_local": "Kawayan Tinik",
+    "name_scientific": "Bambusa blumeana",
+    "region": "Throughout settled lowland and mid-altitude areas nationwide (introduced in prehistoric times)",
+    "density": "≈500 kg/m³ air-dry (~15% MC); ≈1000 kg/m³ green",
+    "culm_diam_range": "60-100 mm (occasionally to ~200 mm)",
+    "wall_thickness_range": "5-30 mm (thicker toward the base)",
+    "treatment_methods": ["Borax-boric acid (BBA) soak / vertical soak diffusion", "Smoke curing", "Clump curing / air-drying"],
+    "structural_role": ["post", "beam", "truss"],
+    "description": "The Philippines' most important structural bamboo — thorny, thick-walled, and high-density, widely used for posts, framing, and engineered bamboo. Three- to four-year-old culms show high relative density, compressive strength, and modulus of elasticity suitable for low-rise housing. Figures vary with age, site, and moisture content.",
+    "image_url": null,
+    "sources": [
+      "PROSEA — Bambusa blumeana: https://prosea-bamboos.linnaeus.naturalis.nl/linnaeus_ng/app/views/species/taxon.php?id=95638",
+      "BioResources — Determining material suitability for low-rise housing in the Philippines: physical and mechanical properties of Bambusa blumeana: https://bioresources.cnr.ncsu.edu/resources/determining-material-suitability-for-low-rise-housing-in-the-philippines-physical-and-mechanical-properties-of-the-bamboo-species-bambusa-blumeana/",
+      "Base Bahay Foundation / DLSU — Establishing the Characteristic Shear Strength of Bambusa blumeana (Kawayan Tinik): https://base-builds.com/wp-content/uploads/2022/07/SEE-15.pdf"
+    ]
+  },
+  {
+    "id": "giant-bamboo",
+    "name_local": "Giant Bamboo (Botong)",
+    "name_scientific": "Dendrocalamus asper",
+    "region": "Cultivated nationwide (introduced); notable plantations in Bukidnon, Mindanao",
+    "density": "Green specific gravity site-dependent, ≈0.5-0.7 (upland culms denser than riparian)",
+    "culm_diam_range": "80-200 mm",
+    "wall_thickness_range": "11-20 mm (thinner toward the top)",
+    "treatment_methods": ["Borax-boric acid (BBA) soak / vertical soak diffusion", "Smoke curing", "Clump curing / air-drying"],
+    "structural_role": ["post", "beam", "truss"],
+    "description": "Large-diameter, thick-walled species favored for engineered bamboo and heavy structural members. Philippine studies (Bukidnon) found culm diameter, wall thickness, density and bending strength all site-dependent, with mid-elevation and upland culms performing best.",
+    "image_url": null,
+    "sources": [
+      "Guadua Bamboo — Dendrocalamus asper: https://www.guaduabamboo.com/dendrocalamus-asper/",
+      "Site influence on the morphological, physical and mechanical properties of giant bamboo (Dendrocalamus asper) in Bukidnon, Mindanao: https://www.ukdr.uplb.edu.ph/journal-articles/872/",
+      "Base Bahay — Establishing the Strength Parameters Parallel to Fiber of Dendrocalamus asper: https://base-builds.com/wp-content/uploads/2022/07/Establishing-the-Strength-Parameters-Parallel-to-Fiber-of-Dendrocalamus-Asper-Giant-Bamboo.pdf"
+    ]
+  },
+  {
+    "id": "bolo",
+    "name_local": "Bolo",
+    "name_scientific": "Gigantochloa levis",
+    "region": "Cultivated across the Philippines (locally naturalized); also Borneo",
+    "density": "Specific gravity 0.5-0.6 (≈500-600 kg/m³); green moisture content 94-143%",
+    "culm_diam_range": "90-130 mm (up to ~160 mm)",
+    "wall_thickness_range": "Thin-walled (culm-wall value site-dependent; species-specific figure not openly published)",
+    "treatment_methods": ["Borax-boric acid (BBA) soak / vertical soak diffusion", "Smoke curing"],
+    "structural_role": ["beam", "flooring", "wall infill"],
+    "description": "Straight, relatively smooth, thin-walled culms used for light framing, flooring slats, and walling. Culm wall thickness, diameter, specific gravity, MOE and MOR are all reported as location-dependent. Culm-wall thickness figure is approximate pending a species-specific test value.",
+    "image_url": null,
+    "sources": [
+      "PROSEA — Gigantochloa levis: https://prosea-bamboos.linnaeus.naturalis.nl/linnaeus_ng/app/views/species/taxon.php?id=95673",
+      "Useful Tropical Plants — Gigantochloa levis: https://tropical.theferns.info/viewtropical.php?id=Gigantochloa+levis"
+    ]
+  },
+  {
+    "id": "bayog",
+    "name_local": "Bayog",
+    "name_scientific": "Dendrocalamus merrillianus (syn. Bambusa merrilliana)",
+    "region": "Endemic to the Philippines",
+    "density": "Specific gravity ≈0.45 (≈450 kg/m³); moisture content ~112-115% green",
+    "culm_diam_range": "80-120 mm (a Capiz study measured mean Ø 65.8 mm)",
+    "wall_thickness_range": "≈21 mm mean (thick-walled; Capiz plantation study)",
+    "treatment_methods": ["Borax-boric acid (BBA) soak / vertical soak diffusion", "Clump curing / air-drying"],
+    "structural_role": ["post", "beam"],
+    "description": "An endemic Philippine species valued for its strength and thick, strong culms — traditionally used in house construction, furniture, fishpond and boat building, and as tying material. A study of plantation culms (Dumarao, Capiz) reported mean modulus of elasticity ≈3.94 GPa and modulus of rupture ≈138.9 MPa. Taxonomy is unsettled between Dendrocalamus merrillianus and Bambusa merrilliana.",
+    "image_url": null,
+    "sources": [
+      "Rojo & Roxas — Physico-Mechanical Properties of Culturally-Preformed Bayog (Bambusa merrilliana): https://www.researchgate.net/publication/267029548_Physico-Mechanical_Properties_of_Culturally-Preformed_Bayog_Bambusa_merrilliana_Elmer_Rojo_Roxas_comb_nov",
+      "Useful Tropical Plants — Dendrocalamus merrillianus: https://tropical.theferns.info/viewtropical.php?id=Dendrocalamus+merrillianus"
+    ]
+  },
+  {
+    "id": "kawayan-kiling",
+    "name_local": "Kawayan Kiling",
+    "name_scientific": "Bambusa vulgaris",
+    "region": "Widespread and naturalized nationwide",
+    "density": "≈626-630 kg/m³ at 12% moisture content",
+    "culm_diam_range": "40-100 mm",
+    "wall_thickness_range": "7-15 mm (range ~3-20 mm)",
+    "treatment_methods": ["Borax-boric acid (BBA) soak / vertical soak diffusion", "Smoke curing"],
+    "structural_role": ["beam", "wall infill", "scaffolding"],
+    "description": "Common, fast-growing, often non-straight culms — the most widely used bamboo overall, but very susceptible to powder-post beetle attack and therefore rarely used untreated as a primary building material. Best treated and used for secondary framing, walling, and scaffolding.",
+    "image_url": null,
+    "sources": [
+      "Bambusa vulgaris (PROSEA) — Pl@ntUse: https://plantuse.plantnet.org/en/Bambusa_vulgaris_(PROSEA)",
+      "Wikipedia — Bambusa vulgaris: https://en.wikipedia.org/wiki/Bambusa_vulgaris",
+      "StuartXchange — Kauayan-kiling / Bambusa vulgaris: https://www.stuartxchange.com/Kauayan-kiling.html"
+    ]
+  },
+  {
+    "id": "buho",
+    "name_local": "Buho",
+    "name_scientific": "Schizostachyum lumampao",
+    "region": "Native; common in Pangasinan, La Union, Ilocos Norte/Sur, Leyte, Panay, and Basilan",
+    "density": "≈460 kg/m³ (green)",
+    "culm_diam_range": "40-80 mm",
+    "wall_thickness_range": "4-5 mm (up to 10 mm) — thin-walled",
+    "treatment_methods": ["Smoke curing", "Clump curing / air-drying"],
+    "structural_role": ["wall infill", "roofing lath"],
+    "description": "Thin-walled, small-diameter, native species used mainly for woven walling (sawali), roofing lath, plybamboo, and handicrafts rather than primary structure. Also processed into laminated buho lumber.",
+    "image_url": null,
+    "sources": [
+      "PROSEA — Schizostachyum lumampao: https://prosea-bamboos.linnaeus.naturalis.nl/linnaeus_ng/app/views/species/taxon.php?id=95712",
+      "FPRDI / RG — Development of laminated buho (Schizostachyum lumampao) lumber: https://www.researchgate.net/publication/313057571_Development_of_laminated_buho_Schizostachyum_lumampao_Blanco_Merr_lumber"
+    ]
+  }
+]

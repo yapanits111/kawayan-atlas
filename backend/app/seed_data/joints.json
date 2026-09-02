@@ -1,0 +1,87 @@
+[
+  {
+    "id": "lashing-tie",
+    "name": "Traditional Lashing (Rattan / Palm-fiber Tie)",
+    "description": "Culms bound at crossings with rattan strips, palm fiber, or nylon cord. The oldest Filipino bamboo connection, used throughout the bahay kubo.",
+    "applicable_species": ["kawayan-tinik", "bolo", "bayog", "buho", "kawayan-kiling"],
+    "applicable_culm_sizes": "30-150 mm (indicative)",
+    "load_notes": "Carries mainly compression and light shear; limited tension capacity; ties loosen as the culm shrinks on drying, so re-tightening or synthetic cord is common. Capacities are not standardized — for engineered work use tested connections per ISO 22156.",
+    "failure_mode": "Tie loosening/slippage and local crushing at the contact point.",
+    "media_url": null,
+    "sources": [
+      "ISO 22156:2021 — Bamboo structures — Bamboo culms — Structural design: https://www.iso.org/standard/73831.html",
+      "INBAR — International Bamboo and Rattan Organisation (structural use of bamboo): https://www.inbar.int/"
+    ]
+  },
+  {
+    "id": "pin-dowel",
+    "name": "Pin / Dowel Joint",
+    "description": "A hardwood or bamboo dowel driven through drilled culms to lock members together, often combined with lashing.",
+    "applicable_species": ["kawayan-tinik", "bayog", "giant-bamboo"],
+    "applicable_culm_sizes": "60-200 mm (indicative)",
+    "load_notes": "Resists shear across the joint better than lashing alone; drilling reduces the culm's net section and can initiate splitting, so hole placement and edge distance matter.",
+    "failure_mode": "Longitudinal splitting of the culm at the drilled hole; dowel shear.",
+    "media_url": null,
+    "sources": [
+      "ISO 22156:2021 — Bamboo structures — Structural design: https://www.iso.org/standard/73831.html",
+      "Base Bahay — Manual for the design of bamboo structures to ISO 22156:2021: https://base-builds.com/manual-for-the-design-of-bamboo-structures-to-iso-221562021/"
+    ]
+  },
+  {
+    "id": "bolted",
+    "name": "Bolted Joint",
+    "description": "Through-bolts with washers clamp culms or connect them to steel plates. Common in modern engineered bamboo.",
+    "applicable_species": ["kawayan-tinik", "giant-bamboo", "bayog"],
+    "applicable_culm_sizes": "70-200 mm (indicative)",
+    "load_notes": "Higher and more predictable capacity than ties, but bolt bearing can crush thin walls or split the culm without reinforcement — hence the mortar-plug variant below. Design per ISO 22156.",
+    "failure_mode": "Wall crushing at the bolt hole; longitudinal splitting.",
+    "media_url": null,
+    "sources": [
+      "ISO 22156:2021 — Bamboo structures — Structural design: https://www.iso.org/standard/73831.html",
+      "Base Bahay — Manual for the design of bamboo structures to ISO 22156:2021: https://base-builds.com/manual-for-the-design-of-bamboo-structures-to-iso-221562021/"
+    ]
+  },
+  {
+    "id": "bolted-mortar-plug",
+    "name": "Bolted + Mortar-Plug Joint",
+    "description": "The culm cavity at the connection is filled with cement mortar before bolting, so the bolt bears on a solid plug instead of the thin wall. This is the core connection of Base Bahay's Cement-Bamboo Frame Technology (CBFT).",
+    "applicable_species": ["kawayan-tinik", "giant-bamboo"],
+    "applicable_culm_sizes": "80-200 mm (indicative)",
+    "load_notes": "Substantially raises bolt-bearing capacity and reduces splitting; adds weight and requires curing. Field-proven at scale — 2,400+ CBFT houses built across the Philippines, Nepal, India and Sri Lanka have withstood typhoons and earthquakes.",
+    "failure_mode": "Plug pull-out or culm splitting beyond the plug.",
+    "media_url": null,
+    "sources": [
+      "Base Bahay Foundation — Cement Bamboo Frame Technology: https://base-builds.com/cement-bamboo-frame-technology/",
+      "Lateral Overturning Tests of Cement-Bamboo Frame Technology Panels (ISO 21581 Method II): https://www.hrpub.org/journals/article_info.php?aid=15621",
+      "ISO 22156:2021 — Bamboo structures — Structural design: https://www.iso.org/standard/73831.html"
+    ]
+  },
+  {
+    "id": "steel-strap-gusset",
+    "name": "Steel-Strap / Gusset Joint",
+    "description": "Formed steel straps, clamps, or gusset plates wrap or bracket multiple culms at a node — used for trusses and heavier framing.",
+    "applicable_species": ["kawayan-tinik", "giant-bamboo"],
+    "applicable_culm_sizes": "80-200 mm (indicative)",
+    "load_notes": "Distributes load over a larger contact area than a single bolt; performance depends on strap tightness, node detailing, and corrosion protection of the steel.",
+    "failure_mode": "Strap slippage, steel corrosion, or local culm crushing under the clamp.",
+    "media_url": null,
+    "sources": [
+      "ISO 22156:2021 — Bamboo structures — Structural design: https://www.iso.org/standard/73831.html",
+      "Base Bahay — Manual for the design of bamboo structures to ISO 22156:2021: https://base-builds.com/manual-for-the-design-of-bamboo-structures-to-iso-221562021/"
+    ]
+  },
+  {
+    "id": "fish-mouth",
+    "name": "Fish-Mouth (Saddle) Joint",
+    "description": "The end of one culm is cut to a concave 'fish-mouth' profile so it seats snugly onto a perpendicular culm, then lashed or bolted.",
+    "applicable_species": ["kawayan-tinik", "bolo", "bayog", "giant-bamboo"],
+    "applicable_culm_sizes": "60-200 mm (indicative)",
+    "load_notes": "Improves bearing contact and alignment at right-angle connections; still relies on a tie or bolt to carry tension, since the cut itself only transfers compression/bearing.",
+    "failure_mode": "Crushing at the saddle contact; failure of the tie or bolt under tension.",
+    "media_url": null,
+    "sources": [
+      "ISO 22156:2021 — Bamboo structures — Structural design: https://www.iso.org/standard/73831.html",
+      "INBAR — International Bamboo and Rattan Organisation: https://www.inbar.int/"
+    ]
+  }
+]

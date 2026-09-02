@@ -1,0 +1,26 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+
+# Env
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.db
+.pytest_cache/
+
+# Node / Next
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Temp
+_autogen_tmp.db
+_migtest.db
+og-preview.png

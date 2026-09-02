@@ -1,0 +1,78 @@
+[
+  {
+    "id": "bahay-kubo-traditional",
+    "name": "Bahay Kubo (Traditional)",
+    "category": "dwelling",
+    "description": "The classic Filipino stilt house: a single elevated room with bamboo posts, sawali walls, and a steep nipa or cogon roof. All-lashed construction.",
+    "components": [
+      {"type": "post", "species_id": "kawayan-tinik", "joint_id": "lashing-tie", "count": 9, "notes": "Elevated on stone or hardwood footings"},
+      {"type": "beam", "species_id": "kawayan-tinik", "joint_id": "lashing-tie", "count": 8, "notes": "Floor girts and top plates"},
+      {"type": "wall", "species_id": "buho", "joint_id": "lashing-tie", "notes": "Woven sawali infill"},
+      {"type": "roof", "species_id": "bolo", "joint_id": "fish-mouth", "notes": "Rafters + purlins, nipa thatch"}
+    ],
+    "default_bom": [
+      {"item": "Kawayan Tinik culms (posts/beams)", "qty": 17, "unit": "culms"},
+      {"item": "Buho (sawali walling)", "qty": 20, "unit": "panels (indicative)"},
+      {"item": "Nipa shingles", "qty": 1, "unit": "lot (indicative)"}
+    ],
+    "known_span_range": "3-4 m single bay (indicative)",
+    "hero_image": null
+  },
+  {
+    "id": "modern-single-room",
+    "name": "Modern Single-Room Dwelling",
+    "category": "dwelling",
+    "description": "A contemporary take on the bahay kubo using bolted and mortar-plug joints for a stiffer frame, larger openings, and a lower-maintenance roof.",
+    "components": [
+      {"type": "post", "species_id": "giant-bamboo", "joint_id": "bolted-mortar-plug", "count": 6, "notes": "Concrete pad footings"},
+      {"type": "beam", "species_id": "giant-bamboo", "joint_id": "bolted", "count": 8},
+      {"type": "wall", "species_id": "kawayan-kiling", "joint_id": "bolted", "notes": "Framed panels, optional glazing"},
+      {"type": "roof", "species_id": "kawayan-tinik", "joint_id": "steel-strap-gusset", "notes": "Metal-clad roof on bamboo trusses"}
+    ],
+    "default_bom": [
+      {"item": "Giant Bamboo culms", "qty": 14, "unit": "culms"},
+      {"item": "Kawayan Tinik (trusses)", "qty": 10, "unit": "culms"},
+      {"item": "Bolts + straps", "qty": 1, "unit": "set (indicative)"}
+    ],
+    "known_span_range": "4-5 m (indicative)",
+    "hero_image": null
+  },
+  {
+    "id": "event-pavilion",
+    "name": "Multi-Bay Event Pavilion",
+    "category": "pavilion",
+    "description": "An open-sided, multi-bay pavilion for events and markets, using bamboo trusses on repeated bays with steel-strap nodes.",
+    "components": [
+      {"type": "post", "species_id": "giant-bamboo", "joint_id": "bolted-mortar-plug", "count": 12},
+      {"type": "truss", "species_id": "kawayan-tinik", "joint_id": "steel-strap-gusset", "count": 5, "notes": "Repeated bay trusses"},
+      {"type": "beam", "species_id": "giant-bamboo", "joint_id": "bolted", "count": 10, "notes": "Ridge and eave beams"},
+      {"type": "roof", "species_id": "bolo", "joint_id": "fish-mouth", "notes": "Open thatch or membrane"}
+    ],
+    "default_bom": [
+      {"item": "Giant Bamboo culms", "qty": 22, "unit": "culms"},
+      {"item": "Kawayan Tinik (trusses)", "qty": 25, "unit": "culms"},
+      {"item": "Steel strap connectors", "qty": 1, "unit": "set (indicative)"}
+    ],
+    "known_span_range": "6-8 m per bay (indicative)",
+    "hero_image": null
+  },
+  {
+    "id": "core-shelter-elevated",
+    "name": "Disaster-Resilient Core Shelter (Elevated)",
+    "category": "resilient-housing",
+    "description": "A compact, flood-elevated core shelter unit with cross-bracing and reinforced joints, intended as a resilient starter dwelling. Structural adequacy is indicative only and requires engineer review.",
+    "components": [
+      {"type": "post", "species_id": "giant-bamboo", "joint_id": "bolted-mortar-plug", "count": 9, "notes": "Elevated on concrete stub columns"},
+      {"type": "beam", "species_id": "giant-bamboo", "joint_id": "bolted", "count": 12, "notes": "Includes diagonal cross-bracing"},
+      {"type": "wall", "species_id": "kawayan-tinik", "joint_id": "bolted", "notes": "Braced framed panels"},
+      {"type": "roof", "species_id": "kawayan-tinik", "joint_id": "steel-strap-gusset", "notes": "Hip roof, storm-strapped"}
+    ],
+    "default_bom": [
+      {"item": "Giant Bamboo culms", "qty": 21, "unit": "culms"},
+      {"item": "Kawayan Tinik culms", "qty": 18, "unit": "culms"},
+      {"item": "Bolts, straps, mortar", "qty": 1, "unit": "set (indicative)"}
+    ],
+    "known_span_range": "3-4 m braced bay (indicative)",
+    "hero_image": null
+  }
+]

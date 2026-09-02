@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+body {
+  background-color: #f7f5ef; /* bamboo-50 */
+  color: #33291f;
+}
+
+/* Subtle woven texture for hero / section backgrounds */
+.bamboo-texture {
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(83, 131, 67, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(154, 130, 72, 0.1), transparent 45%);
+}
