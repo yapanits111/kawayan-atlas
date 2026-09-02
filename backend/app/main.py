@@ -1,4 +1,6 @@
 """Kawayan Atlas API — FastAPI application entry point."""
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,9 +8,11 @@ from .config import settings
 from .database import Base, SessionLocal, engine
 from .routers import calculator, designs, joints, species, templates
 
-# For local dev / scaffolding this creates tables directly. In deployment you may
-# prefer Alembic migrations; running create_all against an existing schema no-ops.
-Base.metadata.create_all(bind=engine)
+# For local dev / scaffolding this creates tables directly. On serverless (Vercel),
+# skip it — the schema is created once by migrations / the local seed against Neon,
+# so we avoid hitting the database on every cold start.
+if not os.getenv("VERCEL"):
+    Base.metadata.create_all(bind=engine)
 
 # Optionally seed on startup (convenient for a first cloud deploy against an empty DB).
 if settings.seed_on_startup:
