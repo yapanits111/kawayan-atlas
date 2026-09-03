@@ -26,12 +26,16 @@ Base Bahay, or published studies. Filter by role, search, and **compare species 
 
 ![Bamboo Atlas](docs/screenshots/atlas.png)
 
-### 🧱 3D Design Studio
-An interactive bahay kubo built with `react-three-fiber` — orbit and zoom, swap the bamboo
-**species**, **roof type**, and **bay count** live, then **save & share** the design via a
-link (anonymous, no account).
+### 🧱 Parametric Design Studio
+The freedom of parametric modelling — like Rhino + Grasshopper, but built for bamboo and
+simple enough to use in a minute (no node graph, no plugins, no learning curve). Drive
+continuous sliders — **width, bay length, bay count, stilt height, wall height, roof
+pitch** — plus **species** and **roof type**, and the `react-three-fiber` model reshapes
+live. A real-time **material takeoff** (footprint, roof angle, total culm length, estimated
+culms) updates as you drag, and any design can be **saved & shared** via a link (anonymous,
+no account).
 
-![3D Design Studio](docs/screenshots/studio.png)
+![Parametric Design Studio](docs/screenshots/studio.png)
 
 ### ⇄ Compare Species
 Pick any species and see their properties side by side.

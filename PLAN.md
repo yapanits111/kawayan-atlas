@@ -147,6 +147,17 @@ atlas, joint library, templates, landing page, and calculator are all shipped.
 > Phase 1 isn't done, that's the signal to **cut it and ship**, not push through. Nothing
 > in the promised Phase 1 scope depends on it.
 
+> **Positioning (Sept 2026, from Daniel & Peñero):** the studio's real job is to be
+> *parametric modelling for bamboo, without the learning curve.* Rhino + Grasshopper give
+> designers enormous parametric freedom, but the learning curve is brutal and there is no
+> simple, bamboo-specific tool — you fight extensions and plugins before you draw anything.
+> Kawayan Atlas's answer: **continuous dimension sliders** (width, bay length, bays, stilt
+> and wall height, roof pitch) that reshape the structure live, with a **real-time material
+> takeoff** (footprint, roof angle, total culm length, estimated culms) — the parametric
+> *output* Grasshopper is prized for — but as plain sliders, no node graph. Implemented in
+> the studio as of this revision; widening the parametric vocabulary (more templates,
+> bracing, openings) is the ongoing direction.
+
 ### D. Template Gallery
 Curated starting points: bahay kubo (traditional & modern), single-room dwelling,
 multi-bay pavilion/event space, disaster-resilient core-shelter unit, elevated

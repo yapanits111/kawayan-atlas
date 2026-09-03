@@ -4,9 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { api, type Species } from "@/lib/api";
 import { speciesColor } from "@/lib/speciesColor";
-import type { RoofType } from "@/components/studio/BahayKuboModel";
+import { computeStructure, type RoofType } from "@/components/studio/BahayKuboModel";
 
-// three.js can't render on the server — load the canvas client-only.
 const StudioCanvas = dynamic(
   () => import("@/components/studio/StudioCanvas").then((m) => m.StudioCanvas),
   {
@@ -25,21 +24,76 @@ const ROOFS: { value: RoofType; label: string }[] = [
   { value: "flat", label: "Low / Flat" },
 ];
 
+const DEFAULTS = {
+  speciesId: "kawayan-tinik",
+  roof: "gable" as RoofType,
+  bays: 2,
+  width: 3.6,
+  bayLength: 3.0,
+  floorHeight: 1.5,
+  wallHeight: 2.2,
+  roofPitch: 1.7,
+};
+
 function parseMinDiameterMm(range: string): number {
   const m = range.match(/\d+/);
   return m ? parseInt(m[0], 10) : 90;
 }
 
+/** Labeled range slider. */
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block text-sm">
+      <div className="mb-1 flex justify-between">
+        <span className="font-medium text-bamboo-700">{label}</span>
+        <span className="tabular-nums text-bamboo-600">
+          {value.toFixed(step < 1 ? 1 : 0)} {unit}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full accent-leaf-600"
+      />
+    </label>
+  );
+}
+
 export default function StudioPage() {
   const [species, setSpecies] = useState<Species[]>([]);
-  const [speciesId, setSpeciesId] = useState("kawayan-tinik");
-  const [roof, setRoof] = useState<RoofType>("gable");
-  const [bays, setBays] = useState(2);
+  const [speciesId, setSpeciesId] = useState(DEFAULTS.speciesId);
+  const [roof, setRoof] = useState<RoofType>(DEFAULTS.roof);
+  const [bays, setBays] = useState(DEFAULTS.bays);
+  const [width, setWidth] = useState(DEFAULTS.width);
+  const [bayLength, setBayLength] = useState(DEFAULTS.bayLength);
+  const [floorHeight, setFloorHeight] = useState(DEFAULTS.floorHeight);
+  const [wallHeight, setWallHeight] = useState(DEFAULTS.wallHeight);
+  const [roofPitch, setRoofPitch] = useState(DEFAULTS.roofPitch);
+
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Load species for the picker, and restore a shared design from ?d=.
   useEffect(() => {
     api.listSpecies().then(setSpecies).catch(() => {});
 
@@ -49,14 +103,15 @@ export default function StudioPage() {
       api
         .getDesign(designId)
         .then((d) => {
-          const p = d.params as {
-            species_id?: string;
-            roof?: RoofType;
-            bays?: number;
-          };
-          if (p.species_id) setSpeciesId(p.species_id);
-          if (p.roof) setRoof(p.roof);
-          if (p.bays) setBays(p.bays);
+          const p = d.params as Record<string, unknown>;
+          if (typeof p.species_id === "string") setSpeciesId(p.species_id);
+          if (typeof p.roof === "string") setRoof(p.roof as RoofType);
+          if (typeof p.bays === "number") setBays(p.bays);
+          if (typeof p.width === "number") setWidth(p.width);
+          if (typeof p.bayLength === "number") setBayLength(p.bayLength);
+          if (typeof p.floorHeight === "number") setFloorHeight(p.floorHeight);
+          if (typeof p.wallHeight === "number") setWallHeight(p.wallHeight);
+          if (typeof p.roofPitch === "number") setRoofPitch(p.roofPitch);
         })
         .catch(() => {});
     }
@@ -65,11 +120,37 @@ export default function StudioPage() {
   const selected = species.find((s) => s.id === speciesId);
   const culmRadius = useMemo(() => {
     const dia = selected ? parseMinDiameterMm(selected.culm_diam_range) : 90;
-    // radius in metres, clamped so it always reads at building scale
     return Math.min(0.09, Math.max(0.035, dia / 2 / 1000));
   }, [selected]);
 
   const color = speciesColor(speciesId);
+
+  const modelParams = {
+    culmRadius,
+    color,
+    roof,
+    bays,
+    width,
+    bayLength,
+    floorHeight,
+    wallHeight,
+    roofPitch,
+  };
+
+  // Live parametric takeoff — recomputed on every parameter change.
+  const { stats } = useMemo(() => computeStructure(modelParams), [modelParams]);
+
+  function reset() {
+    setSpeciesId(DEFAULTS.speciesId);
+    setRoof(DEFAULTS.roof);
+    setBays(DEFAULTS.bays);
+    setWidth(DEFAULTS.width);
+    setBayLength(DEFAULTS.bayLength);
+    setFloorHeight(DEFAULTS.floorHeight);
+    setWallHeight(DEFAULTS.wallHeight);
+    setRoofPitch(DEFAULTS.roofPitch);
+    setShareUrl(null);
+  }
 
   async function saveAndShare() {
     setSaving(true);
@@ -78,10 +159,18 @@ export default function StudioPage() {
       const design = await api.createDesign({
         based_on_template_id: "bahay-kubo-traditional",
         components: [{ type: "frame", species_id: speciesId }],
-        params: { species_id: speciesId, roof, bays },
+        params: {
+          species_id: speciesId,
+          roof,
+          bays,
+          width,
+          bayLength,
+          floorHeight,
+          wallHeight,
+          roofPitch,
+        },
       });
-      const url = `${window.location.origin}/studio?d=${design.id}`;
-      setShareUrl(url);
+      setShareUrl(`${window.location.origin}/studio?d=${design.id}`);
     } catch {
       setShareUrl(null);
     } finally {
@@ -91,25 +180,26 @@ export default function StudioPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="font-display text-3xl font-bold text-leaf-900">Design Studio</h1>
-          <p className="mt-1 text-sm text-bamboo-700">
-            Template: <strong>Bahay Kubo</strong> · orbit &amp; zoom to inspect · swap
-            components on the right. Structural frame only — an advisory sketch, not an
-            engineered model.
-          </p>
-        </div>
+      <div>
+        <h1 className="font-display text-3xl font-bold text-leaf-900">
+          Parametric Design Studio
+        </h1>
+        <p className="mt-1 max-w-3xl text-sm text-bamboo-700">
+          The freedom of parametric modelling — like Rhino + Grasshopper, but built for
+          bamboo and simple enough to use in a minute. Drag the sliders; the structure and
+          the material takeoff update live. Structural frame only — an advisory sketch, not
+          an engineered model.
+        </p>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_21rem]">
         {/* 3D viewport */}
-        <div className="h-[26rem] overflow-hidden rounded-xl border border-bamboo-200 bg-bamboo-100 sm:h-[32rem]">
-          <StudioCanvas culmRadius={culmRadius} color={color} roof={roof} bays={bays} />
+        <div className="h-[26rem] overflow-hidden rounded-xl border border-bamboo-200 bg-bamboo-100 sm:h-[34rem]">
+          <StudioCanvas {...modelParams} />
         </div>
 
         {/* Controls */}
-        <aside className="space-y-6">
+        <aside className="space-y-5">
           <div>
             <label className="mb-1 block text-sm font-semibold text-bamboo-700">
               Bamboo species
@@ -120,15 +210,11 @@ export default function StudioPage() {
               className="w-full rounded-md border border-bamboo-300 bg-white px-3 py-2"
             >
               {species.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name_local}
-                </option>
+                <option key={s.id} value={s.id}>{s.name_local}</option>
               ))}
             </select>
             {selected && (
-              <p className="mt-1 text-xs text-bamboo-600">
-                Ø {selected.culm_diam_range}
-              </p>
+              <p className="mt-1 text-xs text-bamboo-600">Ø {selected.culm_diam_range}</p>
             )}
           </div>
 
@@ -153,63 +239,90 @@ export default function StudioPage() {
             </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-bamboo-700">
-              Bays: {bays}
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              value={bays}
-              onChange={(e) => setBays(parseInt(e.target.value, 10))}
-              className="w-full accent-leaf-600"
-            />
+          {/* Parametric dimension sliders */}
+          <div className="space-y-3 rounded-lg border border-bamboo-200 bg-white/60 p-3">
+            <Slider label="Width" value={width} min={2.5} max={8} step={0.1} unit="m" onChange={setWidth} />
+            <Slider label="Bay length" value={bayLength} min={2} max={5} step={0.1} unit="m" onChange={setBayLength} />
+            <div>
+              <div className="mb-1 flex justify-between text-sm">
+                <span className="font-medium text-bamboo-700">Bays</span>
+                <span className="tabular-nums text-bamboo-600">{bays}</span>
+              </div>
+              <input
+                type="range" min={1} max={5} step={1} value={bays}
+                onChange={(e) => setBays(parseInt(e.target.value, 10))}
+                className="w-full accent-leaf-600"
+              />
+            </div>
+            <Slider label="Stilt height" value={floorHeight} min={0} max={3} step={0.1} unit="m" onChange={setFloorHeight} />
+            <Slider label="Wall height" value={wallHeight} min={1.8} max={4} step={0.1} unit="m" onChange={setWallHeight} />
+            {roof !== "flat" && (
+              <Slider label="Roof pitch" value={roofPitch} min={0.3} max={3} step={0.1} unit="m" onChange={setRoofPitch} />
+            )}
           </div>
 
-          <div className="rounded-lg border border-bamboo-200 bg-white p-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-bamboo-600">Footprint</span>
-              <span className="font-medium">3.6 × {(bays * 3).toFixed(1)} m</span>
+          {/* Live parametric takeoff */}
+          <div className="rounded-lg border border-leaf-200 bg-leaf-50 p-3 text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-leaf-700">
+              Live takeoff
             </div>
-            <div className="mt-1 flex justify-between">
-              <span className="text-bamboo-600">Posts</span>
-              <span className="font-medium">{2 * (bays + 1)}</span>
-            </div>
+            <Stat label="Footprint" value={`${stats.footprintWidth.toFixed(1)} × ${stats.footprintLength.toFixed(1)} m`} />
+            <Stat label="Total height" value={`${stats.totalHeight.toFixed(1)} m`} />
+            {roof !== "flat" && <Stat label="Roof angle" value={`${stats.roofAngleDeg.toFixed(0)}°`} />}
+            <Stat label="Posts" value={String(stats.postCount)} />
+            <Stat label="Members" value={String(stats.memberCount)} />
+            <Stat label="Total culm length" value={`${stats.totalCulmLengthM.toFixed(1)} m`} />
+            <Stat label="Est. culms needed" value={`~${stats.estimatedCulms}`} />
           </div>
 
-          <div>
+          <div className="flex gap-2">
             <button
               onClick={saveAndShare}
               disabled={saving}
-              className="w-full rounded-lg bg-leaf-600 px-4 py-2.5 font-semibold text-white transition hover:bg-leaf-700 disabled:opacity-60"
+              className="flex-1 rounded-lg bg-leaf-600 px-4 py-2.5 font-semibold text-white transition hover:bg-leaf-700 disabled:opacity-60"
             >
-              {saving ? "Saving…" : "Save & share design"}
+              {saving ? "Saving…" : "Save & share"}
             </button>
-            {shareUrl && (
-              <div className="mt-2 rounded-md border border-leaf-200 bg-leaf-50 p-2 text-xs">
-                <p className="mb-1 text-bamboo-700">Shareable link:</p>
-                <div className="flex items-center gap-1">
-                  <input
-                    readOnly
-                    value={shareUrl}
-                    className="min-w-0 flex-1 rounded border border-bamboo-200 bg-white px-2 py-1"
-                  />
-                  <button
-                    onClick={() => {
-                      navigator.clipboard?.writeText(shareUrl);
-                      setCopied(true);
-                    }}
-                    className="rounded bg-bamboo-200 px-2 py-1 font-medium text-bamboo-800"
-                  >
-                    {copied ? "✓" : "Copy"}
-                  </button>
-                </div>
-              </div>
-            )}
+            <button
+              onClick={reset}
+              className="rounded-lg border border-bamboo-300 bg-white px-4 py-2.5 font-semibold text-bamboo-800 hover:bg-bamboo-100"
+            >
+              Reset
+            </button>
           </div>
+
+          {shareUrl && (
+            <div className="rounded-md border border-leaf-200 bg-leaf-50 p-2 text-xs">
+              <p className="mb-1 text-bamboo-700">Shareable link:</p>
+              <div className="flex items-center gap-1">
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="min-w-0 flex-1 rounded border border-bamboo-200 bg-white px-2 py-1"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(shareUrl);
+                    setCopied(true);
+                  }}
+                  className="rounded bg-bamboo-200 px-2 py-1 font-medium text-bamboo-800"
+                >
+                  {copied ? "✓" : "Copy"}
+                </button>
+              </div>
+            </div>
+          )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between py-0.5">
+      <span className="text-bamboo-600">{label}</span>
+      <span className="font-medium tabular-nums text-bamboo-900">{value}</span>
     </div>
   );
 }
