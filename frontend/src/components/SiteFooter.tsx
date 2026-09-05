@@ -12,7 +12,10 @@ export function SiteFooter() {
         </div>
         <p className="mt-6 text-xs text-bamboo-700">
           © {new Date().getFullYear()} Kawayan Atlas · A Philippine bamboo-structures
-          reference &amp; design sandbox · Release 1 (demo)
+          reference &amp; design sandbox · Release 1 (demo) ·{" "}
+          <a href="/about" className="underline underline-offset-2 hover:text-leaf-700">
+            About &amp; methodology
+          </a>
         </p>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { api, type Species } from "@/lib/api";
 import { speciesColor } from "@/lib/speciesColor";
 import { computeStructure, type RoofType } from "@/components/studio/BahayKuboModel";
+import { TEMPLATE_PRESETS } from "@/lib/templatePresets";
 
 const StudioCanvas = dynamic(
   () => import("@/components/studio/StudioCanvas").then((m) => m.StudioCanvas),
@@ -95,6 +96,7 @@ export default function StudioPage() {
   const [saveError, setSaveError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loadStatus, setLoadStatus] = useState<"loaded" | "notfound" | null>(null);
+  const [fromTemplate, setFromTemplate] = useState<string | null>(null);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
   async function copyShare() {
@@ -122,6 +124,22 @@ export default function StudioPage() {
 
     const params = new URLSearchParams(window.location.search);
     const designId = params.get("d");
+    const templateId = params.get("t");
+
+    // Opening a template pre-configures the studio toward that template's scale.
+    if (!designId && templateId && TEMPLATE_PRESETS[templateId]) {
+      const preset = TEMPLATE_PRESETS[templateId];
+      setSpeciesId(preset.speciesId);
+      setRoof(preset.roof);
+      setBays(preset.bays);
+      setWidth(preset.width);
+      setBayLength(preset.bayLength);
+      setFloorHeight(preset.floorHeight);
+      setWallHeight(preset.wallHeight);
+      setRoofPitch(preset.roofPitch);
+      setFromTemplate(preset.name);
+    }
+
     if (designId) {
       api
         .getDesign(designId)
@@ -174,6 +192,7 @@ export default function StudioPage() {
     setWallHeight(DEFAULTS.wallHeight);
     setRoofPitch(DEFAULTS.roofPitch);
     setShareUrl(null);
+    setFromTemplate(null);
   }
 
   async function saveAndShare() {
@@ -221,6 +240,12 @@ export default function StudioPage() {
         </p>
       </div>
 
+      {fromTemplate && loadStatus === null && (
+        <p className="mt-4 rounded-md border border-bamboo-300 bg-bamboo-100/70 p-2 text-sm text-bamboo-900">
+          Starting from the <strong>{fromTemplate}</strong> template — a simplified
+          parametric bamboo frame. Adjust the sliders to make it your own.
+        </p>
+      )}
       {loadStatus === "loaded" && (
         <p className="mt-4 rounded-md border border-leaf-200 bg-leaf-50 p-2 text-sm text-leaf-800">
           ✓ Loaded a shared design. Adjust anything and save again to make it your own.

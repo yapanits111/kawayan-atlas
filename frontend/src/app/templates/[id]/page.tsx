@@ -96,10 +96,12 @@ export default async function TemplateDetail({
       <div className="mt-10 rounded-xl border border-leaf-200 bg-leaf-50 p-5">
         <h3 className="font-display text-lg font-semibold text-leaf-800">Make it your own</h3>
         <p className="mt-1 text-sm text-bamboo-800">
-          Open this template in the Design Studio to swap species, joints, and spacing.
+          Open this template in the parametric studio — it loads at roughly this template&apos;s
+          scale as a simplified bamboo frame, then you adjust dimensions, species, and roof
+          live.
         </p>
         <Link
-          href="/studio"
+          href={`/studio?t=${template.id}`}
           className="mt-3 inline-block rounded-lg bg-leaf-600 px-5 py-2.5 font-semibold text-white hover:bg-leaf-700"
         >
           Open in Design Studio →

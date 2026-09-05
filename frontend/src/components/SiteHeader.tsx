@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const nav = [
   { href: "/atlas", label: "Atlas" },
@@ -13,6 +14,9 @@ const nav = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <header className="sticky top-0 z-40 border-b border-bamboo-200 bg-bamboo-50/90 backdrop-blur">
@@ -30,7 +34,12 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-md px-3 py-2 font-medium text-bamboo-800 transition hover:bg-bamboo-100 hover:text-leaf-700"
+              aria-current={isActive(item.href) ? "page" : undefined}
+              className={`rounded-md px-3 py-2 font-medium transition hover:bg-bamboo-100 hover:text-leaf-700 ${
+                isActive(item.href)
+                  ? "bg-bamboo-100 text-leaf-800"
+                  : "text-bamboo-800"
+              }`}
             >
               {item.label}
             </Link>
@@ -63,7 +72,10 @@ export function SiteHeader() {
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className="block rounded-md px-3 py-2.5 font-medium text-bamboo-800 transition hover:bg-bamboo-100 hover:text-leaf-700"
+              aria-current={isActive(item.href) ? "page" : undefined}
+              className={`block rounded-md px-3 py-2.5 font-medium transition hover:bg-bamboo-100 hover:text-leaf-700 ${
+                isActive(item.href) ? "bg-bamboo-100 text-leaf-800" : "text-bamboo-800"
+              }`}
             >
               {item.label}
             </Link>
