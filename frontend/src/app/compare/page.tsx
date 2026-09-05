@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, type Species } from "@/lib/api";
 import { SpeciesGlyph } from "@/components/SpeciesGlyph";
 import { speciesColor } from "@/lib/speciesColor";
+import { ApiUnavailable } from "@/components/ApiUnavailable";
 
 const ROWS: { label: string; get: (s: Species) => string }[] = [
   { label: "Scientific name", get: (s) => s.name_scientific },
@@ -19,6 +20,7 @@ const ROWS: { label: string; get: (s: Species) => string }[] = [
 export default function ComparePage() {
   const [species, setSpecies] = useState<Species[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     api
@@ -28,7 +30,7 @@ export default function ComparePage() {
         // default: first three, in a stable order
         setSelected(new Set(all.slice(0, 3).map((s) => s.id)));
       })
-      .catch(() => {});
+      .catch(() => setError(true));
   }, []);
 
   const chosen = useMemo(
@@ -61,8 +63,14 @@ export default function ComparePage() {
         </Link>
       </div>
 
+      {error && (
+        <div className="mt-8">
+          <ApiUnavailable />
+        </div>
+      )}
+
       {/* Selector chips */}
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap gap-2" hidden={error}>
         {species.map((s) => {
           const on = selected.has(s.id);
           return (
@@ -82,7 +90,7 @@ export default function ComparePage() {
       </div>
 
       {/* Comparison table */}
-      {chosen.length === 0 ? (
+      {error ? null : chosen.length === 0 ? (
         <p className="mt-10 text-bamboo-700">Select at least one species above.</p>
       ) : (
         <div className="mt-8 overflow-x-auto">

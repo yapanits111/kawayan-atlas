@@ -69,10 +69,20 @@ export interface Design {
   updated_at: string;
 }
 
+/** Error that preserves the HTTP status, so callers can tell 404 from a backend outage. */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function getJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status}`);
+    throw new ApiError(res.status, `API ${path} failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }

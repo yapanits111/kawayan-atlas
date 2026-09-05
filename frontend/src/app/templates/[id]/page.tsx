@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, ApiError, type Template } from "@/lib/api";
+import { ApiUnavailable } from "@/components/ApiUnavailable";
 
 export async function generateMetadata({
   params,
@@ -21,11 +22,16 @@ export default async function TemplateDetail({
 }: {
   params: { id: string };
 }) {
-  let template;
+  let template: Template;
   try {
     template = await api.getTemplate(params.id);
-  } catch {
-    notFound();
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) notFound();
+    return (
+      <div className="mx-auto max-w-4xl px-5 py-12">
+        <ApiUnavailable />
+      </div>
+    );
   }
 
   return (
