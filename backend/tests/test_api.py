@@ -98,17 +98,37 @@ def test_design_create_and_read_roundtrip(client):
     payload = {
         "based_on_template_id": "bahay-kubo-traditional",
         "components": [{"type": "frame", "species_id": "kawayan-tinik"}],
-        "params": {"roof": "hip", "bays": 2},
+        "params": {"roof": "hip", "bays": 2, "width": 3.6},
     }
     created = client.post("/api/designs", json=payload)
     assert created.status_code == 201
-    design_id = created.json()["id"]
+    body = created.json()
+    design_id = body["id"]
+    # The server stamps the template's current version (authoritative), not the client.
+    assert body["based_on_template_version"] == "1"
 
     fetched = client.get(f"/api/designs/{design_id}")
     assert fetched.status_code == 200
     assert fetched.json()["params"]["roof"] == "hip"
 
     assert client.get("/api/designs/missing").status_code == 404
+
+
+def test_design_version_null_without_template(client):
+    r = client.post("/api/designs", json={"params": {"bays": 1}})
+    assert r.status_code == 201
+    assert r.json()["based_on_template_version"] is None
+
+
+def test_design_params_are_validated(client):
+    # bays out of range and an invalid roof value are rejected (422).
+    assert client.post("/api/designs", json={"params": {"bays": 99}}).status_code == 422
+    assert (
+        client.post("/api/designs", json={"params": {"roof": "dome"}}).status_code == 422
+    )
+    assert (
+        client.post("/api/designs", json={"params": {"width": -5}}).status_code == 422
+    )
 
 
 # --- Calculator (gated) ---

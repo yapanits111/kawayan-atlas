@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 
 export type RoofType = "gable" | "hip" | "flat";
+export type BracingType = "none" | "knee" | "cross";
 
 export interface ModelParams {
   culmRadius: number; // metres
@@ -15,6 +16,8 @@ export interface ModelParams {
   floorHeight: number; // m, stilt height
   wallHeight: number; // m, floor to top plate
   roofPitch: number; // m, ridge height above the top plate
+  bracing: BracingType; // lateral stability members
+  door: boolean; // door opening on the front end
 }
 
 export interface MemberSpec {
@@ -96,6 +99,39 @@ export function computeStructure(p: ModelParams): {
         for (const x of [-hx, hx]) add([x, topY, z], [0, ridgeY, ridgeZ], rr, roofColor);
       }
     }
+  }
+
+  // Bracing — lateral stability members
+  const braceR = Math.max(0.025, r * 0.8);
+  if (p.bracing === "knee") {
+    const k = Math.min(0.7, p.wallHeight * 0.35, p.bayLength * 0.3);
+    const corners: [number, number][] = [
+      [-hx, 0],
+      [hx, 0],
+      [-hx, length],
+      [hx, length],
+    ];
+    for (const [x, z] of corners) {
+      const zi = z === 0 ? 1 : -1; // inward along z
+      const xi = x < 0 ? 1 : -1; // inward along x
+      add([x, topY - k, z], [x, topY, z + zi * k], braceR, p.color);
+      add([x, topY - k, z], [x + xi * k, topY, z], braceR, p.color);
+    }
+  } else if (p.bracing === "cross") {
+    for (const z of [0, length]) {
+      add([-hx, p.floorHeight, z], [hx, topY, z], braceR, p.color);
+      add([hx, p.floorHeight, z], [-hx, topY, z], braceR, p.color);
+    }
+  }
+
+  // Door opening on the front end (z = 0)
+  if (p.door) {
+    const dHalf = 0.45;
+    const dTop = p.floorHeight + Math.min(2.0, p.wallHeight * 0.85);
+    const doorR = Math.max(0.03, r * 0.85);
+    add([-dHalf, p.floorHeight, 0], [-dHalf, dTop, 0], doorR, p.color);
+    add([dHalf, p.floorHeight, 0], [dHalf, dTop, 0], doorR, p.color);
+    add([-dHalf, dTop, 0], [dHalf, dTop, 0], doorR, p.color);
   }
 
   // Takeoff: total length of all members

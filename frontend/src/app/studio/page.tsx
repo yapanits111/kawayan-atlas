@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { api, type Species } from "@/lib/api";
 import { speciesColor } from "@/lib/speciesColor";
-import { computeStructure, type RoofType } from "@/components/studio/BahayKuboModel";
+import {
+  computeStructure,
+  type RoofType,
+  type BracingType,
+} from "@/components/studio/BahayKuboModel";
 import { TEMPLATE_PRESETS } from "@/lib/templatePresets";
 
 const StudioCanvas = dynamic(
@@ -34,7 +38,15 @@ const DEFAULTS = {
   floorHeight: 1.5,
   wallHeight: 2.2,
   roofPitch: 1.7,
+  bracing: "none" as BracingType,
+  door: false,
 };
+
+const BRACINGS: { value: BracingType; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "knee", label: "Knee" },
+  { value: "cross", label: "Cross" },
+];
 
 function parseMinDiameterMm(range: string): number {
   const m = range.match(/\d+/);
@@ -90,6 +102,8 @@ export default function StudioPage() {
   const [floorHeight, setFloorHeight] = useState(DEFAULTS.floorHeight);
   const [wallHeight, setWallHeight] = useState(DEFAULTS.wallHeight);
   const [roofPitch, setRoofPitch] = useState(DEFAULTS.roofPitch);
+  const [bracing, setBracing] = useState<BracingType>(DEFAULTS.bracing);
+  const [door, setDoor] = useState(DEFAULTS.door);
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -137,6 +151,8 @@ export default function StudioPage() {
       setFloorHeight(preset.floorHeight);
       setWallHeight(preset.wallHeight);
       setRoofPitch(preset.roofPitch);
+      setBracing(preset.bracing);
+      setDoor(preset.door);
       setFromTemplate(preset.name);
     }
 
@@ -153,6 +169,9 @@ export default function StudioPage() {
           if (typeof p.floorHeight === "number") setFloorHeight(p.floorHeight);
           if (typeof p.wallHeight === "number") setWallHeight(p.wallHeight);
           if (typeof p.roofPitch === "number") setRoofPitch(p.roofPitch);
+          if (p.bracing === "none" || p.bracing === "knee" || p.bracing === "cross")
+            setBracing(p.bracing);
+          if (typeof p.door === "boolean") setDoor(p.door);
           setLoadStatus("loaded");
         })
         .catch(() => setLoadStatus("notfound"));
@@ -177,6 +196,8 @@ export default function StudioPage() {
     floorHeight,
     wallHeight,
     roofPitch,
+    bracing,
+    door,
   };
 
   // Live parametric takeoff — recomputed on every parameter change.
@@ -191,6 +212,8 @@ export default function StudioPage() {
     setFloorHeight(DEFAULTS.floorHeight);
     setWallHeight(DEFAULTS.wallHeight);
     setRoofPitch(DEFAULTS.roofPitch);
+    setBracing(DEFAULTS.bracing);
+    setDoor(DEFAULTS.door);
     setShareUrl(null);
     setFromTemplate(null);
   }
@@ -212,6 +235,8 @@ export default function StudioPage() {
           floorHeight,
           wallHeight,
           roofPitch,
+          bracing,
+          door,
         },
       });
       setShareUrl(`${window.location.origin}/studio?d=${design.id}`);
@@ -324,6 +349,35 @@ export default function StudioPage() {
             {roof !== "flat" && (
               <Slider label="Roof pitch" value={roofPitch} min={0.3} max={3} step={0.1} unit="m" onChange={setRoofPitch} />
             )}
+
+            <div>
+              <div className="mb-1 text-sm font-medium text-bamboo-700">Bracing</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {BRACINGS.map((b) => (
+                  <button
+                    key={b.value}
+                    onClick={() => setBracing(b.value)}
+                    className={`rounded-md border px-2 py-1.5 text-xs font-medium transition ${
+                      bracing === b.value
+                        ? "border-leaf-600 bg-leaf-600 text-white"
+                        : "border-bamboo-300 bg-white text-bamboo-800 hover:bg-bamboo-100"
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 pt-1 text-sm">
+              <input
+                type="checkbox"
+                checked={door}
+                onChange={(e) => setDoor(e.target.checked)}
+                className="h-4 w-4 accent-leaf-600"
+              />
+              <span className="font-medium text-bamboo-700">Door opening (front)</span>
+            </label>
           </div>
 
           {/* Live parametric takeoff */}

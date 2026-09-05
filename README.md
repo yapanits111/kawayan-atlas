@@ -30,8 +30,8 @@ Base Bahay, or published studies. Filter by role, search, and **compare species 
 The freedom of parametric modelling — like Rhino + Grasshopper, but built for bamboo and
 simple enough to use in a minute (no node graph, no plugins, no learning curve). Drive
 continuous sliders — **width, bay length, bay count, stilt height, wall height, roof
-pitch** — plus **species** and **roof type**, and the `react-three-fiber` model reshapes
-live. A real-time **material takeoff** (footprint, roof angle, total culm length, estimated
+pitch** — plus **species**, **roof type**, **bracing** (knee / cross), and a **door
+opening**, and the `react-three-fiber` model reshapes live. A real-time **material takeoff** (footprint, roof angle, total culm length, estimated
 culms) updates as you drag, and any design can be **saved & shared** via a link (anonymous,
 no account).
 

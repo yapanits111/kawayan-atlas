@@ -45,8 +45,13 @@ export default async function TemplateDetail({
       <h1 className="mt-1 font-display text-4xl font-bold text-leaf-900">{template.name}</h1>
       <p className="mt-4 text-bamboo-900">{template.description}</p>
 
-      <div className="mt-4 inline-block rounded-lg bg-bamboo-100 px-4 py-2 text-sm text-bamboo-800">
-        Indicative span range: <strong>{template.known_span_range}</strong>
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="rounded-lg bg-bamboo-100 px-4 py-2 text-bamboo-800">
+          Indicative span range: <strong>{template.known_span_range}</strong>
+        </span>
+        <span className="rounded-lg bg-bamboo-100 px-3 py-2 text-bamboo-600">
+          Template v{template.version}
+        </span>
       </div>
 
       <h2 className="mt-10 font-display text-xl font-semibold text-leaf-800">Components</h2>

@@ -4,6 +4,7 @@
     "name": "Bahay Kubo (Traditional)",
     "category": "dwelling",
     "description": "The classic Filipino stilt house: a single elevated room with bamboo posts, sawali walls, and a steep nipa or cogon roof. All-lashed construction.",
+    "version": "1",
     "components": [
       {"type": "post", "species_id": "kawayan-tinik", "joint_id": "lashing-tie", "count": 9, "notes": "Elevated on stone or hardwood footings"},
       {"type": "beam", "species_id": "kawayan-tinik", "joint_id": "lashing-tie", "count": 8, "notes": "Floor girts and top plates"},
@@ -23,6 +24,7 @@
     "name": "Modern Single-Room Dwelling",
     "category": "dwelling",
     "description": "A contemporary take on the bahay kubo using bolted and mortar-plug joints for a stiffer frame, larger openings, and a lower-maintenance roof.",
+    "version": "1",
     "components": [
       {"type": "post", "species_id": "giant-bamboo", "joint_id": "bolted-mortar-plug", "count": 6, "notes": "Concrete pad footings"},
       {"type": "beam", "species_id": "giant-bamboo", "joint_id": "bolted", "count": 8},
@@ -42,6 +44,7 @@
     "name": "Multi-Bay Event Pavilion",
     "category": "pavilion",
     "description": "An open-sided, multi-bay pavilion for events and markets, using bamboo trusses on repeated bays with steel-strap nodes.",
+    "version": "1",
     "components": [
       {"type": "post", "species_id": "giant-bamboo", "joint_id": "bolted-mortar-plug", "count": 12},
       {"type": "truss", "species_id": "kawayan-tinik", "joint_id": "steel-strap-gusset", "count": 5, "notes": "Repeated bay trusses"},
@@ -61,6 +64,7 @@
     "name": "Disaster-Resilient Core Shelter (Elevated)",
     "category": "resilient-housing",
     "description": "A compact, flood-elevated core shelter unit with cross-bracing and reinforced joints, intended as a resilient starter dwelling. Structural adequacy is indicative only and requires engineer review.",
+    "version": "1",
     "components": [
       {"type": "post", "species_id": "giant-bamboo", "joint_id": "bolted-mortar-plug", "count": 9, "notes": "Elevated on concrete stub columns"},
       {"type": "beam", "species_id": "giant-bamboo", "joint_id": "bolted", "count": 12, "notes": "Includes diagonal cross-bracing"},

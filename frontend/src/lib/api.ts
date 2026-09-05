@@ -53,6 +53,7 @@ export interface Template {
   name: string;
   category: string;
   description: string;
+  version: string;
   components: TemplateComponent[];
   default_bom: BomItem[];
   known_span_range: string;

@@ -1,4 +1,4 @@
-import type { RoofType } from "@/components/studio/BahayKuboModel";
+import type { RoofType, BracingType } from "@/components/studio/BahayKuboModel";
 
 /**
  * Approximate starting parameters for opening a template in the parametric studio.
@@ -15,6 +15,8 @@ export interface TemplatePreset {
   floorHeight: number;
   wallHeight: number;
   roofPitch: number;
+  bracing: BracingType;
+  door: boolean;
 }
 
 export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
@@ -28,6 +30,8 @@ export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
     floorHeight: 1.6,
     wallHeight: 2.2,
     roofPitch: 1.9,
+    bracing: "none",
+    door: true,
   },
   "modern-single-room": {
     name: "Modern Single-Room Dwelling",
@@ -39,6 +43,8 @@ export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
     floorHeight: 0.6,
     wallHeight: 2.6,
     roofPitch: 1.2,
+    bracing: "knee",
+    door: true,
   },
   "event-pavilion": {
     name: "Multi-Bay Event Pavilion",
@@ -50,6 +56,8 @@ export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
     floorHeight: 0.3,
     wallHeight: 3.0,
     roofPitch: 2.2,
+    bracing: "knee",
+    door: false,
   },
   "core-shelter-elevated": {
     name: "Disaster-Resilient Core Shelter",
@@ -61,5 +69,7 @@ export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
     floorHeight: 1.8,
     wallHeight: 2.2,
     roofPitch: 1.5,
+    bracing: "cross",
+    door: true,
   },
 };

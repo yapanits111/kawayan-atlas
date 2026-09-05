@@ -54,6 +54,7 @@ class Template(Base):
     name: Mapped[str] = mapped_column(String, index=True)
     category: Mapped[str] = mapped_column(String, index=True)
     description: Mapped[str] = mapped_column(Text, default="")
+    version: Mapped[str] = mapped_column(String, default="1", server_default="1")
     components: Mapped[list] = mapped_column(JSON, default=list)
     default_bom: Mapped[list] = mapped_column(JSON, default=list)
     known_span_range: Mapped[str] = mapped_column(String, default="")

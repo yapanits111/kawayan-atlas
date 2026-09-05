@@ -1,7 +1,8 @@
 """Pydantic schemas — API request/response shapes, decoupled from ORM models."""
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SpeciesOut(BaseModel):
@@ -42,17 +43,44 @@ class TemplateOut(BaseModel):
     name: str
     category: str
     description: str
+    version: str
     components: list[dict]
     default_bom: list[dict]
     known_span_range: str
     hero_image: str | None
 
 
+class DesignParams(BaseModel):
+    """Studio design parameters, validated with the same bounds as the UI sliders.
+    Unknown keys are ignored rather than rejected, so the shape can grow safely."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    species_id: str | None = Field(default=None, max_length=64)
+    roof: Literal["gable", "hip", "flat"] | None = None
+    bracing: Literal["none", "knee", "cross"] | None = None
+    door: bool | None = None
+    bays: int | None = Field(default=None, ge=1, le=6)
+    width: float | None = Field(default=None, gt=0, le=20)
+    bayLength: float | None = Field(default=None, gt=0, le=10)
+    floorHeight: float | None = Field(default=None, ge=0, le=6)
+    wallHeight: float | None = Field(default=None, gt=0, le=8)
+    roofPitch: float | None = Field(default=None, ge=0, le=6)
+
+
+class DesignComponentIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: str = Field(max_length=32)
+    species_id: str | None = Field(default=None, max_length=64)
+    joint_id: str | None = Field(default=None, max_length=64)
+
+
 class DesignCreate(BaseModel):
-    based_on_template_id: str | None = None
-    based_on_template_version: str | None = None
-    components: list[dict] = []
-    params: dict = {}
+    based_on_template_id: str | None = Field(default=None, max_length=64)
+    based_on_template_version: str | None = None  # ignored on input; server stamps it
+    components: list[DesignComponentIn] = Field(default_factory=list, max_length=50)
+    params: DesignParams = Field(default_factory=DesignParams)
 
 
 class DesignOut(BaseModel):
