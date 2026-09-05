@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { api, type Species } from "@/lib/api";
 import { speciesColor } from "@/lib/speciesColor";
@@ -92,7 +92,30 @@ export default function StudioPage() {
 
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"loaded" | "notfound" | null>(null);
+  const shareInputRef = useRef<HTMLInputElement>(null);
+
+  async function copyShare() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+    } catch {
+      // Fallback for non-secure contexts where the Clipboard API is blocked.
+      const el = shareInputRef.current;
+      if (el) {
+        el.select();
+        try {
+          document.execCommand("copy");
+          setCopied(true);
+        } catch {
+          /* leave it for the user to copy manually */
+        }
+      }
+    }
+  }
 
   useEffect(() => {
     api.listSpecies().then(setSpecies).catch(() => {});
@@ -112,8 +135,9 @@ export default function StudioPage() {
           if (typeof p.floorHeight === "number") setFloorHeight(p.floorHeight);
           if (typeof p.wallHeight === "number") setWallHeight(p.wallHeight);
           if (typeof p.roofPitch === "number") setRoofPitch(p.roofPitch);
+          setLoadStatus("loaded");
         })
-        .catch(() => {});
+        .catch(() => setLoadStatus("notfound"));
     }
   }, []);
 
@@ -154,6 +178,7 @@ export default function StudioPage() {
 
   async function saveAndShare() {
     setSaving(true);
+    setSaveError(false);
     setCopied(false);
     try {
       const design = await api.createDesign({
@@ -171,8 +196,12 @@ export default function StudioPage() {
         },
       });
       setShareUrl(`${window.location.origin}/studio?d=${design.id}`);
+      // Keep the address bar in sync so a refresh preserves the saved design.
+      window.history.replaceState(null, "", `/studio?d=${design.id}`);
+      setLoadStatus(null);
     } catch {
       setShareUrl(null);
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -191,6 +220,17 @@ export default function StudioPage() {
           an engineered model.
         </p>
       </div>
+
+      {loadStatus === "loaded" && (
+        <p className="mt-4 rounded-md border border-leaf-200 bg-leaf-50 p-2 text-sm text-leaf-800">
+          ✓ Loaded a shared design. Adjust anything and save again to make it your own.
+        </p>
+      )}
+      {loadStatus === "notfound" && (
+        <p className="mt-4 rounded-md border border-clay-400/40 bg-clay-400/10 p-2 text-sm text-bamboo-900">
+          That shared design link couldn&apos;t be found — starting from the default instead.
+        </p>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_21rem]">
         {/* 3D viewport */}
@@ -291,23 +331,29 @@ export default function StudioPage() {
             </button>
           </div>
 
+          {saveError && (
+            <p className="rounded-md border border-clay-400/40 bg-clay-400/10 p-2 text-xs text-bamboo-900">
+              Couldn&apos;t save — the API is unreachable. Make sure the backend is running,
+              then try again.
+            </p>
+          )}
+
           {shareUrl && (
             <div className="rounded-md border border-leaf-200 bg-leaf-50 p-2 text-xs">
               <p className="mb-1 text-bamboo-700">Shareable link:</p>
               <div className="flex items-center gap-1">
                 <input
+                  ref={shareInputRef}
                   readOnly
                   value={shareUrl}
+                  onFocus={(e) => e.currentTarget.select()}
                   className="min-w-0 flex-1 rounded border border-bamboo-200 bg-white px-2 py-1"
                 />
                 <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(shareUrl);
-                    setCopied(true);
-                  }}
+                  onClick={copyShare}
                   className="rounded bg-bamboo-200 px-2 py-1 font-medium text-bamboo-800"
                 >
-                  {copied ? "✓" : "Copy"}
+                  {copied ? "✓ Copied" : "Copy"}
                 </button>
               </div>
             </div>
