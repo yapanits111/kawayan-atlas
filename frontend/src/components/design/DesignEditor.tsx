@@ -6,6 +6,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -13,6 +14,9 @@ import {
   type Node,
   type Edge,
 } from "@xyflow/react";
+import * as THREE from "three";
+import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
 import { GraphNode } from "./GraphNode";
 import { Viewport3D } from "./Viewport3D";
 import { OutputPanel } from "./OutputPanel";
@@ -162,10 +166,32 @@ export function DesignEditor() {
     [setNodes, setEdges],
   );
 
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      setNodes((ns) => {
+        const src = ns.find((n) => n.id === nodeId);
+        if (!src) return ns;
+        const type = (src.data as { type: string }).type;
+        const id = `${type}-${idCounter.current++}`;
+        return [
+          ...ns,
+          {
+            ...src,
+            id,
+            position: { x: src.position.x + 40, y: src.position.y + 40 },
+            selected: false,
+            data: { type, params: { ...(src.data as { params: object }).params } },
+          },
+        ];
+      });
+    },
+    [setNodes],
+  );
+
   // Inject the param-updater into every node's data so custom nodes can edit params.
   const rfNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode } })),
-    [nodes, updateParam, deleteNode],
+    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode } })),
+    [nodes, updateParam, deleteNode, duplicateNode],
   );
 
   const onConnect = useCallback(
@@ -292,6 +318,33 @@ export function DesignEditor() {
     return evaluateGraph(evalNodes, edges);
   }, [nodes, edges]);
 
+  function exportGLB() {
+    const group = new THREE.Group();
+    for (const el of result.scene.elements) {
+      const geo =
+        el.kind === "culm"
+          ? tubeGeometry(el.curve, (el.startDiameter ?? 80) / 2000, (el.endDiameter ?? 70) / 2000, 10)
+          : stripGeometry(el.curve, (el.width ?? 25) / 1000, (el.thickness ?? 6) / 1000);
+      const mat = new THREE.MeshStandardMaterial({ color: el.kind === "culm" ? 0x9a8248 : 0xc2b184 });
+      group.add(new THREE.Mesh(geo, mat));
+    }
+    if (group.children.length === 0) return;
+    new GLTFExporter().parse(
+      group,
+      (gltf) => {
+        const blob = new Blob([gltf as ArrayBuffer], { type: "model/gltf-binary" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "kawayan-model.glb";
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      () => {},
+      { binary: true },
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       {/* Toolbar */}
@@ -339,6 +392,13 @@ export function DesignEditor() {
             className="rounded-md bg-leaf-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-leaf-700 disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save & share"}
+          </button>
+          <button
+            onClick={exportGLB}
+            title="Export the 3D model as a .glb file"
+            className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+          >
+            Export 3D
           </button>
           <button
             onClick={undo}
@@ -399,6 +459,7 @@ export function DesignEditor() {
           >
             <Background color="#d9cfb2" gap={18} />
             <Controls />
+            <MiniMap pannable zoomable className="!bg-bamboo-50" />
           </ReactFlow>
         </div>
 

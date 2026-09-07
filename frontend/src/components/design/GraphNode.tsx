@@ -19,6 +19,7 @@ export function GraphNode({ data, id }: NodeProps) {
     params: Record<string, number | string>;
     updateParam: (nodeId: string, key: string, value: number | string) => void;
     deleteNode?: (nodeId: string) => void;
+    duplicateNode?: (nodeId: string) => void;
     error?: string;
   };
   const def = NODE_DEFS[d.type];
@@ -36,15 +37,26 @@ export function GraphNode({ data, id }: NodeProps) {
         style={{ background: CAT_COLOR[def.category] }}
       >
         <span>{def.label}</span>
-        {d.deleteNode && (
-          <button
-            onClick={() => d.deleteNode?.(id)}
-            title="Delete node"
-            className="nodrag rounded px-1 leading-none text-white/80 hover:bg-white/20 hover:text-white"
-          >
-            ×
-          </button>
-        )}
+        <span className="flex items-center gap-0.5">
+          {d.duplicateNode && (
+            <button
+              onClick={() => d.duplicateNode?.(id)}
+              title="Duplicate node"
+              className="nodrag rounded px-1 text-xs leading-none text-white/80 hover:bg-white/20 hover:text-white"
+            >
+              ⧉
+            </button>
+          )}
+          {d.deleteNode && (
+            <button
+              onClick={() => d.deleteNode?.(id)}
+              title="Delete node"
+              className="nodrag rounded px-1 leading-none text-white/80 hover:bg-white/20 hover:text-white"
+            >
+              ×
+            </button>
+          )}
+        </span>
       </div>
 
       {/* Ports */}
