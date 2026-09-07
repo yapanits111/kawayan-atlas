@@ -55,24 +55,11 @@ const postBeam: ExampleGraph = {
 
 const wovenScreen: ExampleGraph = {
   nodes: [
-    n("lineV", "line", 0, 20, { ax: -1.5, ay: 0, az: 0, bx: -1.5, by: 2.4, bz: 0 }),
-    n("arrV", "arrayLinear", 220, 20, { count: 8, dx: 0.4, dy: 0, dz: 0 }),
-    n("stripV", "strip", 440, 20, { w: 30, t: 5 }),
-    n("lineH", "line", 0, 240, { ax: -1.5, ay: 0.3, az: 0.03, bx: 1.5, by: 0.3, bz: 0.03 }),
-    n("arrH", "arrayLinear", 220, 240, { count: 7, dx: 0, dy: 0.3, dz: 0 }),
-    n("stripH", "strip", 440, 240, { w: 30, t: 5 }),
-    n("bundle", "bundle", 660, 130),
-    n("sch", "schedule", 860, 130),
+    n("weave", "weave", 0, 40, { w: 3, h: 2.4, u: 8, v: 7, plane: "xy" }),
+    n("strip", "strip", 260, 40, { w: 30, t: 5 }),
+    n("sch", "schedule", 500, 40),
   ],
-  edges: [
-    e("e1", "lineV", "arrV"),
-    e("e2", "arrV", "stripV"),
-    e("e3", "lineH", "arrH"),
-    e("e4", "arrH", "stripH"),
-    e("e5", "stripV", "bundle", "out", "a"),
-    e("e6", "stripH", "bundle", "out", "b"),
-    e("e7", "bundle", "sch"),
-  ],
+  edges: [e("e1", "weave", "strip"), e("e2", "strip", "sch")],
 };
 
 const columnRing: ExampleGraph = {

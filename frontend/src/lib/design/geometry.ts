@@ -91,6 +91,31 @@ export function loftCurves(a: Curve, b: Curve, count: number): Curve[] {
   return out;
 }
 
+/** A woven lattice: `u` warp lines crossing `v` weft lines over a w×h panel, the two
+ *  layers offset by `gap` along the plane normal so strips visually interleave. */
+export function weaveLattice(
+  width: number,
+  height: number,
+  u: number,
+  v: number,
+  plane: "xy" | "xz" | "yz",
+  gap = 0.03,
+): Curve[] {
+  const map = (a: number, b: number, c: number): Vec3 =>
+    plane === "xy" ? [a, b, c] : plane === "xz" ? [a, c, b] : [c, a, b];
+  const hw = width / 2, hh = height / 2;
+  const out: Curve[] = [];
+  for (let i = 0; i < u; i++) {
+    const a = u > 1 ? -hw + width * (i / (u - 1)) : 0;
+    out.push({ points: [map(a, -hh, gap), map(a, hh, gap)] });
+  }
+  for (let j = 0; j < v; j++) {
+    const b = v > 1 ? -hh + height * (j / (v - 1)) : 0;
+    out.push({ points: [map(-hw, b, -gap), map(hw, b, -gap)] });
+  }
+  return out;
+}
+
 export function mirrorAcross(p: Vec3, plane: "xy" | "xz" | "yz"): Vec3 {
   if (plane === "yz") return [-p[0], p[1], p[2]];
   if (plane === "xz") return [p[0], -p[1], p[2]];

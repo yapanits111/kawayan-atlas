@@ -208,6 +208,20 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       });
     },
   },
+  weave: {
+    type: "weave", label: "Weave", category: "Geometry",
+    inputs: [], outputs: [{ id: "out", label: "curves", kind: "curves" }],
+    params: [
+      { key: "w", label: "width", default: 3, min: 0.2, step: 0.1 },
+      { key: "h", label: "height", default: 2.4, min: 0.2, step: 0.1 },
+      { key: "u", label: "warp", default: 8, min: 1, max: 60, step: 1 },
+      { key: "v", label: "weft", default: 7, min: 1, max: 60, step: 1 },
+      { key: "plane", label: "plane", default: "xy", options: ["xy", "xz", "yz"] },
+    ],
+    compute: (_i, p) => ({
+      out: G.weaveLattice(num(p, "w"), num(p, "h"), num(p, "u"), num(p, "v"), p.plane as "xy" | "xz" | "yz"),
+    }),
+  },
   culm: {
     type: "culm", label: "Culm", category: "Bamboo",
     inputs: [{ id: "in", label: "curve/points", kind: "curves" }],

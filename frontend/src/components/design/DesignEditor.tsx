@@ -83,6 +83,9 @@ export function DesignEditor() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const restored = useRef(false);
+  const history = useRef<{ stack: string[]; index: number }>({ stack: [], index: -1 });
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // On mount: restore from ?g=<id> (server) or localStorage, else keep the preloaded chain.
   useEffect(() => {
@@ -117,6 +120,24 @@ export function DesignEditor() {
         /* ignore quota / private mode */
       }
     }, 500);
+    return () => clearTimeout(t);
+  }, [nodes, edges]);
+
+  // Undo/redo history (debounced snapshots). Restoring a snapshot re-matches the
+  // stored string, so the recorder naturally skips re-recording it.
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => {
+      const snap = JSON.stringify(serialize(nodes, edges));
+      const h = history.current;
+      if (h.stack[h.index] === snap) return;
+      h.stack = h.stack.slice(0, h.index + 1);
+      h.stack.push(snap);
+      if (h.stack.length > 60) h.stack.shift();
+      h.index = h.stack.length - 1;
+      setCanUndo(h.index > 0);
+      setCanRedo(false);
+    }, 400);
     return () => clearTimeout(t);
   }, [nodes, edges]);
 
@@ -214,6 +235,53 @@ export function DesignEditor() {
     window.history.replaceState(null, "", "/design");
   }
 
+  const applySnap = useCallback(
+    (snap: string) => {
+      const g = JSON.parse(snap);
+      setNodes(g.nodes as Node[]);
+      setEdges(g.edges as Edge[]);
+    },
+    [setNodes, setEdges],
+  );
+
+  const undo = useCallback(() => {
+    const h = history.current;
+    if (h.index <= 0) return;
+    h.index--;
+    applySnap(h.stack[h.index]);
+    setCanUndo(h.index > 0);
+    setCanRedo(h.index < h.stack.length - 1);
+  }, [applySnap]);
+
+  const redo = useCallback(() => {
+    const h = history.current;
+    if (h.index >= h.stack.length - 1) return;
+    h.index++;
+    applySnap(h.stack[h.index]);
+    setCanUndo(h.index > 0);
+    setCanRedo(h.index < h.stack.length - 1);
+  }, [applySnap]);
+
+  // Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo (not while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   // Live evaluation (dependency-ordered) — recomputes on any node/edge change.
   const result = useMemo(() => {
     const evalNodes = nodes.map((n) => ({
@@ -271,6 +339,22 @@ export function DesignEditor() {
             className="rounded-md bg-leaf-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-leaf-700 disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save & share"}
+          </button>
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100 disabled:opacity-40"
+          >
+            Undo
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100 disabled:opacity-40"
+          >
+            Redo
           </button>
           <button
             onClick={reset}
