@@ -18,6 +18,7 @@ import { Viewport3D } from "./Viewport3D";
 import { SchedulePanel } from "./SchedulePanel";
 import { NODE_DEFS, CATEGORIES } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
+import { EXAMPLES } from "@/lib/design/examples";
 import { api } from "@/lib/api";
 
 const STORAGE_KEY = "kawayan-design-graph";
@@ -158,6 +159,15 @@ export function DesignEditor() {
     }
   }
 
+  function loadExample(key: string) {
+    const ex = EXAMPLES.find((x) => x.key === key);
+    if (!ex) return;
+    setNodes(ex.graph.nodes as unknown as Node[]);
+    setEdges(ex.graph.edges as unknown as Edge[]);
+    setShareUrl(null);
+    window.history.replaceState(null, "", "/design");
+  }
+
   function reset() {
     setNodes(INITIAL_NODES);
     setEdges(INITIAL_EDGES);
@@ -189,6 +199,19 @@ export function DesignEditor() {
           node-graph parametric modeling · drag to connect · edit params live
         </span>
         <div className="ml-auto flex items-center gap-2">
+          <select
+            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) loadExample(e.target.value);
+              e.target.value = "";
+            }}
+          >
+            <option value="">Examples…</option>
+            {EXAMPLES.map((x) => (
+              <option key={x.key} value={x.key}>{x.label}</option>
+            ))}
+          </select>
           <select
             className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
             value=""
