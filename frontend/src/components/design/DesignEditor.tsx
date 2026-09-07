@@ -48,6 +48,18 @@ function defaultParams(type: string): Record<string, number | string> {
   return Object.fromEntries(NODE_DEFS[type].params.map((p) => [p.key, p.default]));
 }
 
+// Which output kinds may feed which input kinds (mirrors the compute coercions).
+const COMPAT: Record<string, string[]> = {
+  number: ["number"],
+  points: ["points", "curve", "curves"],
+  curve: ["curve", "curves"],
+  curves: ["curve", "curves"],
+  elements: ["elements"],
+  joints: ["joints"],
+  schedule: ["schedule"],
+  checks: ["checks"],
+};
+
 // Preloaded graph — the whitepaper's proof chain (a bamboo barrel-vault of arches).
 const INITIAL_NODES: Node[] = [
   { id: "arc-1", type: "graphNode", position: { x: 0, y: 40 }, data: { type: "arc", params: { ...defaultParams("arc"), plane: "xy", radius: 3, start: 0, end: 180, samples: 24 } } },
@@ -121,15 +133,37 @@ export function DesignEditor() {
     [setNodes],
   );
 
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((ns) => ns.filter((n) => n.id !== nodeId));
+      setEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    },
+    [setNodes, setEdges],
+  );
+
   // Inject the param-updater into every node's data so custom nodes can edit params.
   const rfNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam } })),
-    [nodes, updateParam],
+    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode } })),
+    [nodes, updateParam, deleteNode],
   );
 
   const onConnect = useCallback(
     (c: Connection) => setEdges((eds) => addEdge(c, eds)),
     [setEdges],
+  );
+
+  // Block connections between incompatible port kinds.
+  const isValidConnection = useCallback(
+    (c: Connection | Edge) => {
+      const src = nodes.find((n) => n.id === c.source);
+      const tgt = nodes.find((n) => n.id === c.target);
+      if (!src || !tgt) return false;
+      const outKind = NODE_DEFS[(src.data as { type: string }).type]?.outputs.find((o) => o.id === c.sourceHandle)?.kind;
+      const inKind = NODE_DEFS[(tgt.data as { type: string }).type]?.inputs.find((i) => i.id === c.targetHandle)?.kind;
+      if (!outKind || !inKind) return false;
+      return (COMPAT[outKind] ?? [outKind]).includes(inKind);
+    },
+    [nodes],
   );
 
   function addNode(type: string) {
@@ -274,6 +308,7 @@ export function DesignEditor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}

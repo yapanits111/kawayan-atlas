@@ -258,11 +258,16 @@ export default function StudioPage() {
           Parametric Design Studio
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-bamboo-700">
-          The freedom of parametric modelling — like Rhino + Grasshopper, but built for
-          bamboo and simple enough to use in a minute. Drag the sliders; the structure and
-          the material takeoff update live. Structural frame only — an advisory sketch, not
-          an engineered model.
+          A quick, guided way to shape one bamboo template with sliders — the structure and
+          material takeoff update live. Structural frame only, an advisory sketch, not an
+          engineered model.
         </p>
+        <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-leaf-200 bg-leaf-50 px-3 py-2 text-sm text-bamboo-800">
+          <span>Want full node-graph parametric freedom (any form, cut-lists, strips)?</span>
+          <a href="/design" className="font-semibold text-leaf-700 underline underline-offset-2">
+            Open the Design Lab →
+          </a>
+        </div>
       </div>
 
       {fromTemplate && loadStatus === null && (

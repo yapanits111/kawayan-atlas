@@ -18,6 +18,7 @@ export function GraphNode({ data, id }: NodeProps) {
     type: string;
     params: Record<string, number | string>;
     updateParam: (nodeId: string, key: string, value: number | string) => void;
+    deleteNode?: (nodeId: string) => void;
     error?: string;
   };
   const def = NODE_DEFS[d.type];
@@ -31,10 +32,19 @@ export function GraphNode({ data, id }: NodeProps) {
       style={{ borderColor: d.error ? "#a9623a" : "#d9cfb2" }}
     >
       <div
-        className="rounded-t-lg px-2 py-1.5 font-semibold text-white"
+        className="flex items-center justify-between rounded-t-lg px-2 py-1.5 font-semibold text-white"
         style={{ background: CAT_COLOR[def.category] }}
       >
-        {def.label}
+        <span>{def.label}</span>
+        {d.deleteNode && (
+          <button
+            onClick={() => d.deleteNode?.(id)}
+            title="Delete node"
+            className="nodrag rounded px-1 leading-none text-white/80 hover:bg-white/20 hover:text-white"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Ports */}
