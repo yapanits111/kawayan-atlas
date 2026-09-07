@@ -1,7 +1,7 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -18,6 +18,28 @@ import { Viewport3D } from "./Viewport3D";
 import { SchedulePanel } from "./SchedulePanel";
 import { NODE_DEFS, CATEGORIES } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
+import { api } from "@/lib/api";
+
+const STORAGE_KEY = "kawayan-design-graph";
+
+/** Strip React Flow's runtime fields down to the essentials we persist. */
+function serialize(nodes: Node[], edges: Edge[]) {
+  return {
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      type: "graphNode",
+      position: n.position,
+      data: { type: (n.data as { type: string }).type, params: (n.data as { params: unknown }).params },
+    })),
+    edges: edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+    })),
+  };
+}
 
 const nodeTypes = { graphNode: GraphNode };
 
@@ -45,6 +67,45 @@ export function DesignEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const idCounter = useRef(100);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const restored = useRef(false);
+
+  // On mount: restore from ?g=<id> (server) or localStorage, else keep the preloaded chain.
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const gid = new URLSearchParams(window.location.search).get("g");
+    const applyGraph = (g: { nodes: unknown[]; edges: unknown[] }) => {
+      if (Array.isArray(g.nodes) && Array.isArray(g.edges)) {
+        setNodes(g.nodes as Node[]);
+        setEdges(g.edges as Edge[]);
+      }
+    };
+    if (gid) {
+      api.getGraph(gid).then((doc) => applyGraph(doc.data)).catch(() => {});
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) applyGraph(JSON.parse(saved));
+    } catch {
+      /* ignore */
+    }
+  }, [setNodes, setEdges]);
+
+  // Autosave to localStorage (debounced) so work survives a refresh.
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize(nodes, edges)));
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [nodes, edges]);
 
   const updateParam = useCallback(
     (nodeId: string, key: string, value: number | string) => {
@@ -83,6 +144,32 @@ export function DesignEditor() {
     ]);
   }
 
+  async function saveAndShare() {
+    setSaving(true);
+    try {
+      const doc = await api.createGraph(serialize(nodes, edges));
+      const url = `${window.location.origin}/design?g=${doc.id}`;
+      setShareUrl(url);
+      window.history.replaceState(null, "", `/design?g=${doc.id}`);
+    } catch {
+      setShareUrl(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function reset() {
+    setNodes(INITIAL_NODES);
+    setEdges(INITIAL_EDGES);
+    setShareUrl(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    window.history.replaceState(null, "", "/design");
+  }
+
   // Live evaluation (dependency-ordered) — recomputes on any node/edge change.
   const result = useMemo(() => {
     const evalNodes = nodes.map((n) => ({
@@ -101,7 +188,7 @@ export function DesignEditor() {
         <span className="hidden text-xs text-bamboo-600 sm:inline">
           node-graph parametric modeling · drag to connect · edit params live
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <select
             className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
             value=""
@@ -121,8 +208,39 @@ export function DesignEditor() {
               </optgroup>
             ))}
           </select>
+          <button
+            onClick={saveAndShare}
+            disabled={saving}
+            className="rounded-md bg-leaf-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-leaf-700 disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save & share"}
+          </button>
+          <button
+            onClick={reset}
+            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+          >
+            Reset
+          </button>
         </div>
       </div>
+
+      {shareUrl && (
+        <div className="flex items-center gap-2 border-b border-leaf-200 bg-leaf-50 px-4 py-1.5 text-xs">
+          <span className="text-bamboo-700">Shareable link:</span>
+          <input
+            readOnly
+            value={shareUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="min-w-0 flex-1 rounded border border-bamboo-200 bg-white px-2 py-1"
+          />
+          <button
+            onClick={() => navigator.clipboard?.writeText(shareUrl)}
+            className="rounded bg-bamboo-200 px-2 py-1 font-medium text-bamboo-800"
+          >
+            Copy
+          </button>
+        </div>
+      )}
 
       {/* Split: node canvas | (3D view over cut-list) */}
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1.15fr_1fr]">

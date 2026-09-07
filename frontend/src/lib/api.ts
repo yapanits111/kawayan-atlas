@@ -80,6 +80,13 @@ export class ApiError extends Error {
   }
 }
 
+export interface GraphDoc {
+  id: string;
+  data: { nodes: unknown[]; edges: unknown[] };
+  created_at: string;
+  updated_at: string;
+}
+
 async function getJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
   if (!res.ok) {
@@ -123,6 +130,9 @@ export const api = {
     params?: Record<string, unknown>;
   }) => postJSON<Design>(`/api/designs`, body),
   getDesign: (id: string) => getJSON<Design>(`/api/designs/${id}`),
+  createGraph: (data: { nodes: unknown[]; edges: unknown[] }) =>
+    postJSON<GraphDoc>(`/api/graphs`, { data }),
+  getGraph: (id: string) => getJSON<GraphDoc>(`/api/graphs/${id}`),
   calculateSingleMember: (body: {
     species_id: string;
     diameter_mm: number;

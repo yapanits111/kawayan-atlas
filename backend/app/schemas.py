@@ -95,6 +95,21 @@ class DesignOut(BaseModel):
     updated_at: datetime
 
 
+class GraphCreate(BaseModel):
+    """A Design Lab node graph. `data` holds {nodes, edges}; counts are capped."""
+
+    data: dict
+
+
+class GraphOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    data: dict
+    created_at: datetime
+    updated_at: datetime
+
+
 # --- Calculator (gated OFF until SME review; see PLAN.md 3E/3F/7) ---
 
 

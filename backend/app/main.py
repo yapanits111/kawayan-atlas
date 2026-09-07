@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import Base, SessionLocal, engine
-from .routers import calculator, designs, joints, species, templates
+from .routers import calculator, designs, graphs, joints, species, templates
 
 # For local dev / scaffolding this creates tables directly. On serverless (Vercel),
 # skip it — the schema is created once by migrations / the local seed against Neon,
@@ -41,6 +41,7 @@ app.include_router(species.router)
 app.include_router(joints.router)
 app.include_router(templates.router)
 app.include_router(designs.router)
+app.include_router(graphs.router)
 app.include_router(calculator.router)
 
 

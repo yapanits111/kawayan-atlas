@@ -134,6 +134,24 @@ def test_design_params_are_validated(client):
 # --- Calculator (gated) ---
 
 
+def test_graph_save_and_load_roundtrip(client):
+    graph = {"nodes": [{"id": "a", "type": "graphNode", "data": {"type": "arc", "params": {}}}], "edges": []}
+    created = client.post("/api/graphs", json={"data": graph})
+    assert created.status_code == 201
+    gid = created.json()["id"]
+
+    fetched = client.get(f"/api/graphs/{gid}")
+    assert fetched.status_code == 200
+    assert fetched.json()["data"]["nodes"][0]["id"] == "a"
+
+    assert client.get("/api/graphs/missing").status_code == 404
+
+
+def test_graph_rejects_malformed(client):
+    # missing nodes/edges arrays
+    assert client.post("/api/graphs", json={"data": {"foo": 1}}).status_code == 422
+
+
 def test_calculator_is_gated_off(client):
     r = client.post(
         "/api/calculator/single-member",

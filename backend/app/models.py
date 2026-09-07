@@ -82,3 +82,16 @@ class Design(Base):
     )
 
     template: Mapped["Template | None"] = relationship()
+
+
+class Graph(Base):
+    """A saved Design Lab node graph (anonymous, shareable by id — Release 1)."""
+
+    __tablename__ = "graphs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)  # {nodes:[...], edges:[...]}
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow
+    )
