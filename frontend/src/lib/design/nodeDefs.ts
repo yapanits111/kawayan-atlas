@@ -134,6 +134,21 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       return { out: curves.map((c) => ({ points: c.points.map((pt) => G.mirrorAcross(pt, plane)) })) };
     },
   },
+  loft: {
+    type: "loft", label: "Loft", category: "Geometry",
+    inputs: [
+      { id: "a", label: "curve A", kind: "curve" },
+      { id: "b", label: "curve B", kind: "curve" },
+    ],
+    outputs: [{ id: "out", label: "curves", kind: "curves" }],
+    params: [{ key: "count", label: "count", default: 8, min: 2, max: 100, step: 1 }],
+    compute: (i, p) => {
+      const a = asCurves(i.a)[0];
+      const b = asCurves(i.b)[0];
+      if (!a || !b) return { out: [] };
+      return { out: G.loftCurves(a, b, num(p, "count")) };
+    },
+  },
   divide: {
     type: "divide", label: "Divide", category: "Geometry",
     inputs: [{ id: "in", label: "curve", kind: "curve" }],

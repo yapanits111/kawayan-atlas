@@ -80,6 +80,17 @@ export function extrudePoints(points: Vec3[], height: number, axis: "x" | "y" | 
   return points.map((p) => ({ points: [p, add(p, dir)] }));
 }
 
+/** Ruled loft between two rail curves: N straight generators connecting matching
+ *  divisions of each rail. Strip/culm-swept, this makes lofted shells and gridshells. */
+export function loftCurves(a: Curve, b: Curve, count: number): Curve[] {
+  const pa = divide(a, count);
+  const pb = divide(b, count);
+  const n = Math.min(pa.length, pb.length);
+  const out: Curve[] = [];
+  for (let i = 0; i < n; i++) out.push({ points: [pa[i], pb[i]] });
+  return out;
+}
+
 export function mirrorAcross(p: Vec3, plane: "xy" | "xz" | "yz"): Vec3 {
   if (plane === "yz") return [-p[0], p[1], p[2]];
   if (plane === "xz") return [p[0], -p[1], p[2]];

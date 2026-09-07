@@ -104,8 +104,27 @@ const checkedPosts: ExampleGraph = {
   ],
 };
 
+const loftedShell: ExampleGraph = {
+  nodes: [
+    n("arcA", "arc", 0, 20, { plane: "xy", radius: 3, start: 0, end: 180, samples: 24 }),
+    n("arcB", "arc", 0, 240, { plane: "xy", radius: 2.2, start: 0, end: 180, samples: 24 }),
+    n("transB", "transform", 220, 240, { tz: 2.6 }),
+    n("loft", "loft", 460, 120, { count: 11 }),
+    n("strip", "strip", 700, 120, { w: 45, t: 6 }),
+    n("sch", "schedule", 920, 120),
+  ],
+  edges: [
+    e("e1", "arcA", "loft", "out", "a"),
+    e("e2", "arcB", "transB"),
+    e("e3", "transB", "loft", "out", "b"),
+    e("e4", "loft", "strip"),
+    e("e5", "strip", "sch"),
+  ],
+};
+
 export const EXAMPLES: { key: string; label: string; graph: ExampleGraph }[] = [
   { key: "vault", label: "Barrel vault", graph: vault },
+  { key: "shell", label: "Lofted shell", graph: loftedShell },
   { key: "postbeam", label: "Post & beam frame", graph: postBeam },
   { key: "woven", label: "Woven screen", graph: wovenScreen },
   { key: "ring", label: "Column ring", graph: columnRing },
