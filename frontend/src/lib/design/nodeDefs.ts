@@ -9,7 +9,8 @@ export interface ParamDef {
   min?: number;
   max?: number;
   step?: number;
-  options?: string[]; // present => select
+  options?: string[]; // present => static select
+  dynamic?: "species"; // present => select populated at runtime (e.g. from the atlas)
 }
 export interface PortDef {
   id: string;
@@ -227,6 +228,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [{ id: "in", label: "curve/points", kind: "curves" }],
     outputs: [{ id: "out", label: "elements", kind: "elements" }],
     params: [
+      { key: "species", label: "species", default: "", dynamic: "species" },
       { key: "d0", label: "Ø start (mm)", default: 90, min: 5, step: 1 },
       { key: "d1", label: "Ø end (mm)", default: 75, min: 5, step: 1 },
       { key: "wall", label: "wall (mm)", default: 12, min: 1, step: 1 },

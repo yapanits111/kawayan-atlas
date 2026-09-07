@@ -20,6 +20,7 @@ export function GraphNode({ data, id }: NodeProps) {
     updateParam: (nodeId: string, key: string, value: number | string) => void;
     deleteNode?: (nodeId: string) => void;
     duplicateNode?: (nodeId: string) => void;
+    speciesOptions?: { value: string; label: string }[];
     error?: string;
   };
   const def = NODE_DEFS[d.type];
@@ -95,7 +96,18 @@ export function GraphNode({ data, id }: NodeProps) {
           {def.params.map((param) => (
             <label key={param.key} className="flex items-center justify-between gap-2">
               <span className="text-bamboo-600">{param.label}</span>
-              {param.options ? (
+              {param.dynamic === "species" ? (
+                <select
+                  className="w-24 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
+                  value={String(d.params[param.key] ?? "")}
+                  onChange={(e) => d.updateParam(id, param.key, e.target.value)}
+                >
+                  <option value="">Custom</option>
+                  {(d.speciesOptions ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              ) : param.options ? (
                 <select
                   className="w-20 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
                   value={String(d.params[param.key] ?? param.default)}

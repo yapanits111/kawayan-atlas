@@ -90,6 +90,30 @@ export function DesignEditor() {
   const history = useRef<{ stack: string[]; index: number }>({ stack: [], index: -1 });
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const speciesInfo = useRef<Record<string, { d0: number; d1: number; wall: number }>>({});
+  const [speciesOptions, setSpeciesOptions] = useState<{ value: string; label: string }[]>([]);
+
+  // Pull the seeded atlas species so culm nodes can be bamboo-aware (auto-fill dims).
+  useEffect(() => {
+    api
+      .listSpecies()
+      .then((all) => {
+        const info: Record<string, { d0: number; d1: number; wall: number }> = {};
+        const opts: { value: string; label: string }[] = [];
+        const firstInt = (s: string) => {
+          const m = s.match(/\d+/);
+          return m ? parseInt(m[0], 10) : 0;
+        };
+        for (const s of all) {
+          const d0 = firstInt(s.culm_diam_range) || 90;
+          info[s.id] = { d0, d1: Math.round(d0 * 0.87), wall: firstInt(s.wall_thickness_range) || 10 };
+          opts.push({ value: s.id, label: s.name_local });
+        }
+        speciesInfo.current = info;
+        setSpeciesOptions(opts);
+      })
+      .catch(() => {});
+  }, []);
 
   // On mount: restore from ?g=<id> (server) or localStorage, else keep the preloaded chain.
   useEffect(() => {
@@ -148,11 +172,18 @@ export function DesignEditor() {
   const updateParam = useCallback(
     (nodeId: string, key: string, value: number | string) => {
       setNodes((ns) =>
-        ns.map((n) =>
-          n.id === nodeId
-            ? { ...n, data: { ...n.data, params: { ...(n.data as { params: object }).params, [key]: value } } }
-            : n,
-        ),
+        ns.map((n) => {
+          if (n.id !== nodeId) return n;
+          const params = { ...(n.data as { params: Record<string, number | string> }).params, [key]: value };
+          // Picking a species fills the culm's diameter/wall from the atlas data.
+          if (key === "species" && typeof value === "string" && speciesInfo.current[value]) {
+            const info = speciesInfo.current[value];
+            params.d0 = info.d0;
+            params.d1 = info.d1;
+            params.wall = info.wall;
+          }
+          return { ...n, data: { ...n.data, params } };
+        }),
       );
     },
     [setNodes],
@@ -190,8 +221,8 @@ export function DesignEditor() {
 
   // Inject the param-updater into every node's data so custom nodes can edit params.
   const rfNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode } })),
-    [nodes, updateParam, deleteNode, duplicateNode],
+    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions } })),
+    [nodes, updateParam, deleteNode, duplicateNode, speciesOptions],
   );
 
   const onConnect = useCallback(
