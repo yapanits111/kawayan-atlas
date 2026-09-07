@@ -1,6 +1,6 @@
 // Graph evaluation engine (whitepaper §6b): topological, dependency-ordered, live.
 import { NODE_DEFS } from "./nodeDefs";
-import type { Curve, Element, Schedule, Vec3 } from "./types";
+import type { Curve, Element, Joint, Schedule, Vec3 } from "./types";
 
 export interface GNode {
   id: string;
@@ -16,7 +16,7 @@ export interface GEdge {
 
 export interface EvalResult {
   outputs: Record<string, Record<string, unknown>>;
-  scene: { elements: Element[]; curves: Curve[]; points: Vec3[] };
+  scene: { elements: Element[]; curves: Curve[]; points: Vec3[]; joints: Joint[] };
   schedule: Schedule | null;
   errors: Record<string, string>;
 }
@@ -86,6 +86,8 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
   const seen = new Set<string>();
   const curves: Curve[] = [];
   const points: Vec3[] = [];
+  const joints: Joint[] = [];
+  const jointsSeen = new Set<string>();
   let schedule: Schedule | null = null;
 
   const pushElements = (v: unknown) => {
@@ -110,6 +112,13 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
       if (port.kind === "schedule") {
         const s = val as Schedule | undefined;
         if (s && (!schedule || s.rows.length > schedule.rows.length)) schedule = s;
+      } else if (port.kind === "joints") {
+        if (Array.isArray(val))
+          for (const j of val as Joint[])
+            if (j?.id && !jointsSeen.has(j.id)) {
+              jointsSeen.add(j.id);
+              joints.push(j);
+            }
       } else if (terminal) {
         if (port.kind === "elements") pushElements(val);
         else if (port.kind === "curve" && val) curves.push(val as Curve);
@@ -125,5 +134,5 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
     }
   }
 
-  return { outputs, scene: { elements, curves, points }, schedule, errors };
+  return { outputs, scene: { elements, curves, points, joints }, schedule, errors };
 }

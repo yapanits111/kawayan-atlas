@@ -266,6 +266,7 @@ export function DesignEditor() {
               elements={result.scene.elements}
               curves={result.scene.curves}
               points={result.scene.points}
+              joints={result.scene.joints}
             />
           </div>
           <div className="min-h-0 border-t border-bamboo-200 bg-white">

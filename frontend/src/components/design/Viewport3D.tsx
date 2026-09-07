@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
-import type { Curve, Element, Vec3 } from "@/lib/design/types";
+import type { Curve, Element, Joint, Vec3 } from "@/lib/design/types";
 
 function ElementMesh({ el }: { el: Element }) {
   const geo = useMemo(() => {
@@ -32,10 +32,12 @@ export function Viewport3D({
   elements,
   curves,
   points,
+  joints,
 }: {
   elements: Element[];
   curves: Curve[];
   points: Vec3[];
+  joints: Joint[];
 }) {
   return (
     <Canvas shadows camera={{ position: [6, 5, 7], fov: 45 }}>
@@ -59,6 +61,14 @@ export function Viewport3D({
         <mesh key={`p${i}`} position={p}>
           <sphereGeometry args={[0.04, 8, 8]} />
           <meshStandardMaterial color="#a9623a" />
+        </mesh>
+      ))}
+
+      {/* Joints */}
+      {joints.map((j) => (
+        <mesh key={j.id} position={j.position}>
+          <sphereGeometry args={[0.07, 12, 12]} />
+          <meshStandardMaterial color="#33291f" />
         </mesh>
       ))}
 

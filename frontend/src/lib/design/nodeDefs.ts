@@ -86,6 +86,54 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     ],
     compute: (_i, p) => ({ out: G.grid(num(p, "cols"), num(p, "rows"), num(p, "sx"), num(p, "sy")) }),
   },
+  circle: {
+    type: "circle", label: "Circle", category: "Geometry",
+    inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
+    params: [
+      { key: "radius", label: "radius", default: 2, min: 0.1, step: 0.1 },
+      { key: "plane", label: "plane", default: "xz", options: ["xy", "xz", "yz"] },
+      { key: "seg", label: "segments", default: 32, min: 3, max: 128, step: 1 },
+    ],
+    compute: (_i, p) => ({ out: G.circle(num(p, "radius"), p.plane as "xy" | "xz" | "yz", num(p, "seg")) }),
+  },
+  rectangle: {
+    type: "rectangle", label: "Rectangle", category: "Geometry",
+    inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
+    params: [
+      { key: "w", label: "width", default: 3, min: 0.1, step: 0.1 },
+      { key: "d", label: "depth", default: 3, min: 0.1, step: 0.1 },
+      { key: "plane", label: "plane", default: "xz", options: ["xy", "xz", "yz"] },
+    ],
+    compute: (_i, p) => ({ out: G.rectangle(num(p, "w"), num(p, "d"), p.plane as "xy" | "xz" | "yz") }),
+  },
+  extrude: {
+    type: "extrude", label: "Extrude (posts)", category: "Geometry",
+    inputs: [{ id: "in", label: "points", kind: "points" }],
+    outputs: [{ id: "out", label: "curves", kind: "curves" }],
+    params: [
+      { key: "height", label: "height", default: 2.5, step: 0.1 },
+      { key: "axis", label: "axis", default: "y", options: ["x", "y", "z"] },
+    ],
+    compute: (i, p) => {
+      const v = i.in;
+      const pts = Array.isArray(v) && v.length && isVec3(v[0]) ? (v as Vec3[]) : [];
+      return { out: G.extrudePoints(pts, num(p, "height"), p.axis as "x" | "y" | "z") };
+    },
+  },
+  mirror: {
+    type: "mirror", label: "Mirror", category: "Geometry",
+    inputs: [{ id: "in", label: "geometry", kind: "curves" }],
+    outputs: [{ id: "out", label: "geometry", kind: "curves" }],
+    params: [{ key: "plane", label: "plane", default: "yz", options: ["xy", "xz", "yz"] }],
+    compute: (i, p) => {
+      const plane = p.plane as "xy" | "xz" | "yz";
+      const els = asElements(i.in);
+      if (els.length)
+        return { out: els.map((e) => ({ ...e, id: `${e.id}m`, curve: { points: e.curve.points.map((pt) => G.mirrorAcross(pt, plane)) } })) };
+      const curves = asCurves(i.in);
+      return { out: curves.map((c) => ({ points: c.points.map((pt) => G.mirrorAcross(pt, plane)) })) };
+    },
+  },
   divide: {
     type: "divide", label: "Divide", category: "Geometry",
     inputs: [{ id: "in", label: "curve", kind: "curve" }],

@@ -58,6 +58,34 @@ export function arc(
   return { points };
 }
 
+/** Closed circle as a polyline. */
+export function circle(radius: number, plane: "xy" | "xz" | "yz", seg = 32): Curve {
+  const c = arc([0, 0, 0], radius, 0, 360, plane, seg + 1);
+  return c;
+}
+
+/** Closed rectangle (w along first axis, d along second) as a polyline. */
+export function rectangle(w: number, d: number, plane: "xy" | "xz" | "yz"): Curve {
+  const hw = w / 2, hd = d / 2;
+  const uv: [number, number][] = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd], [-hw, -hd]];
+  const points: Vec3[] = uv.map(([a, b]) =>
+    plane === "xy" ? [a, b, 0] : plane === "xz" ? [a, 0, b] : [0, a, b],
+  );
+  return { points };
+}
+
+/** Extrude points into straight lines (columns/posts) of a given height along an axis. */
+export function extrudePoints(points: Vec3[], height: number, axis: "x" | "y" | "z"): Curve[] {
+  const dir: Vec3 = axis === "x" ? [height, 0, 0] : axis === "z" ? [0, 0, height] : [0, height, 0];
+  return points.map((p) => ({ points: [p, add(p, dir)] }));
+}
+
+export function mirrorAcross(p: Vec3, plane: "xy" | "xz" | "yz"): Vec3 {
+  if (plane === "yz") return [-p[0], p[1], p[2]];
+  if (plane === "xz") return [p[0], -p[1], p[2]];
+  return [p[0], p[1], -p[2]];
+}
+
 export function grid(
   cols: number,
   rows: number,
