@@ -22,15 +22,19 @@ entirely on free tiers. See [`PLAN.md`](PLAN.md) for the full product & build pl
 ### 🧩 Design Lab — browser node-graph platform
 A Grasshopper-style computational design tool built specifically for bamboo, in the
 browser — no install, no plugins. A **node-graph canvas** drives a **live 3D view** and a
-**fabrication cut-list**. It's built on the whitepaper's architecture, in dependency order:
+**fabrication cut-list**, built on the whitepaper's architecture in dependency order
+(geometry kernel → live evaluation engine → bamboo nodes → output).
 
-- **Geometry kernel** — primitives and operations (line, arc, grid, divide, transform, array, loft/sweep)
-- **Node-graph evaluation engine** — dependency-ordered, live re-evaluation on any change
-- **Bamboo-aware nodes** — `culm` (tapered tube along a curve), `strip` (flat ribbon), `joint`, `bundle`
-- **Fabrication output** — a `schedule` node produces a per-element cut-list (lengths, diameters, cut angles) exportable as **CSV**
+**Node palette:**
+- **Geometry** — line, arc, circle, rectangle, grid, divide, transform, array (linear/polar), mirror, extrude→posts, **loft**, **weave**
+- **Bamboo** — `culm` (tapered tube; **linked to the species atlas** — pick a species to auto-fill its cited diameter/wall), `strip` (flat ribbon), `joint`, `bundle`
+- **Analysis** (advisory) — `load`, `support`, `check`: coarse geometric slenderness flags anchored to **ISO 22156**, with a prominent "not a verified analysis" disclaimer; capacity is never computed (Phase 2 / whitepaper §9)
+- **Output** — `schedule` → per-element cut-list, exportable as **CSV / PDF**; the 3D model exports as **GLB** (mesh) or **DXF** (CAD lines)
 
-The proof chain `arc → divide → culm → array → schedule` ships preloaded, rendering a
-bamboo barrel-vault whose every parameter is live-editable.
+**Editor:** live dependency-ordered re-evaluation, autosave + shareable links, undo/redo,
+wire-type validation, node delete/duplicate, a minimap, and seven worked examples
+(barrel vault, lofted shell, post & beam, woven screen, column ring, checked posts). The
+proof chain `arc → divide → culm → array → schedule` ships preloaded.
 
 ![Design Lab](docs/screenshots/design.png)
 
