@@ -362,18 +362,38 @@ export function DesignEditor() {
     if (group.children.length === 0) return;
     new GLTFExporter().parse(
       group,
-      (gltf) => {
-        const blob = new Blob([gltf as ArrayBuffer], { type: "model/gltf-binary" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "kawayan-model.glb";
-        a.click();
-        URL.revokeObjectURL(url);
-      },
+      (gltf) => download(new Blob([gltf as ArrayBuffer], { type: "model/gltf-binary" }), "kawayan-model.glb"),
       () => {},
       { binary: true },
     );
+  }
+
+  function exportDXF() {
+    // DXF R12 line geometry of every element centerline. Three.js is Y-up; CAD is
+    // Z-up, so map (x, y, z) -> (x, z, y).
+    const out: string[] = ["0", "SECTION", "2", "ENTITIES"];
+    for (const el of result.scene.elements) {
+      const layer = el.kind === "culm" ? "CULM" : "STRIP";
+      const p = el.curve.points;
+      for (let i = 0; i < p.length - 1; i++) {
+        const a = p[i], b = p[i + 1];
+        out.push("0", "LINE", "8", layer,
+          "10", String(a[0]), "20", String(a[2]), "30", String(a[1]),
+          "11", String(b[0]), "21", String(b[2]), "31", String(b[1]));
+      }
+    }
+    out.push("0", "ENDSEC", "0", "EOF");
+    if (result.scene.elements.length === 0) return;
+    download(new Blob([out.join("\n")], { type: "application/dxf" }), "kawayan-model.dxf");
+  }
+
+  function download(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -424,13 +444,20 @@ export function DesignEditor() {
           >
             {saving ? "Saving…" : "Save & share"}
           </button>
-          <button
-            onClick={exportGLB}
-            title="Export the 3D model as a .glb file"
-            className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+          <select
+            className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800"
+            value=""
+            title="Export the 3D model"
+            onChange={(e) => {
+              if (e.target.value === "glb") exportGLB();
+              else if (e.target.value === "dxf") exportDXF();
+              e.target.value = "";
+            }}
           >
-            Export 3D
-          </button>
+            <option value="">Export 3D…</option>
+            <option value="glb">GLB (mesh)</option>
+            <option value="dxf">DXF (lines)</option>
+          </select>
           <button
             onClick={undo}
             disabled={!canUndo}
