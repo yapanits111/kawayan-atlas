@@ -8,7 +8,8 @@ const nav = [
   { href: "/atlas", label: "Atlas" },
   { href: "/joints", label: "Joints" },
   { href: "/templates", label: "Templates" },
-  { href: "/studio", label: "Design Studio" },
+  { href: "/design", label: "Design Lab" },
+  { href: "/studio", label: "Studio" },
   { href: "/calculator", label: "Calculator" },
 ];
 

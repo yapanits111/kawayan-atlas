@@ -19,6 +19,21 @@ entirely on free tiers. See [`PLAN.md`](PLAN.md) for the full product & build pl
 
 ## Features
 
+### 🧩 Design Lab — browser node-graph platform
+A Grasshopper-style computational design tool built specifically for bamboo, in the
+browser — no install, no plugins. A **node-graph canvas** drives a **live 3D view** and a
+**fabrication cut-list**. It's built on the whitepaper's architecture, in dependency order:
+
+- **Geometry kernel** — primitives and operations (line, arc, grid, divide, transform, array, loft/sweep)
+- **Node-graph evaluation engine** — dependency-ordered, live re-evaluation on any change
+- **Bamboo-aware nodes** — `culm` (tapered tube along a curve), `strip` (flat ribbon), `joint`, `bundle`
+- **Fabrication output** — a `schedule` node produces a per-element cut-list (lengths, diameters, cut angles) exportable as **CSV**
+
+The proof chain `arc → divide → culm → array → schedule` ships preloaded, rendering a
+bamboo barrel-vault whose every parameter is live-editable.
+
+![Design Lab](docs/screenshots/design.png)
+
 ### 📖 Bamboo Species Atlas
 Six Philippine bamboo species with **verified, cited** properties (density, culm diameter,
 wall thickness, structural roles, treatment) — every figure sourced to PROSEA, DOST-FPRDI /
