@@ -1,5 +1,5 @@
 // Node registry — every node's inputs, outputs, params, and compute (whitepaper §7).
-import type { Vec3, Curve, Element, Joint, PortKind, Schedule, ScheduleRow } from "./types";
+import type { Vec3, Curve, Element, Joint, PortKind, Schedule, ScheduleRow, CheckFlag, CheckResult } from "./types";
 import * as G from "./geometry";
 
 export interface ParamDef {
@@ -19,7 +19,7 @@ export interface PortDef {
 export interface NodeDef {
   type: string;
   label: string;
-  category: "Geometry" | "Bamboo" | "Output";
+  category: "Geometry" | "Bamboo" | "Output" | "Analysis";
   inputs: PortDef[];
   outputs: PortDef[];
   params: ParamDef[];
@@ -275,6 +275,68 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     params: [],
     compute: (i) => ({ out: [...asElements(i.a), ...asElements(i.b)] }),
   },
+  load: {
+    type: "load", label: "Load", category: "Analysis",
+    inputs: [], outputs: [{ id: "out", label: "load", kind: "number" }],
+    params: [
+      { key: "kind", label: "type", default: "distributed", options: ["distributed", "point"] },
+      { key: "value", label: "value (kN)", default: 1, min: 0, step: 0.5 },
+    ],
+    compute: (_i, p) => ({ out: num(p, "value") }),
+  },
+  support: {
+    type: "support", label: "Support", category: "Analysis",
+    inputs: [{ id: "in", label: "elements", kind: "elements" }],
+    outputs: [{ id: "out", label: "elements", kind: "elements" }],
+    params: [{ key: "kind", label: "fixity", default: "pinned", options: ["pinned", "fixed"] }],
+    compute: (i) => ({ out: asElements(i.in) }),
+  },
+  check: {
+    type: "check", label: "Check (advisory)", category: "Analysis",
+    inputs: [
+      { id: "in", label: "elements", kind: "elements" },
+      { id: "load", label: "load", kind: "number" },
+    ],
+    outputs: [
+      { id: "out", label: "elements", kind: "elements" },
+      { id: "checks", label: "checks", kind: "checks" },
+    ],
+    params: [{ key: "slenderness", label: "L/Ø limit", default: 30, min: 5, step: 1 }],
+    compute: (i, p) => {
+      const els = asElements(i.in);
+      const limit = num(p, "slenderness");
+      const hasLoad = typeof i.load === "number" && (i.load as number) > 0;
+      const flags: CheckFlag[] = [];
+      for (const e of els) {
+        // Slenderness is a purely geometric sanity check (no material assumptions).
+        const dia = e.kind === "culm" ? (e.startDiameter ?? 0) / 1000 : (e.width ?? 0) / 1000;
+        if (dia > 0) {
+          const ratio = e.length / dia;
+          if (ratio > limit) {
+            flags.push({
+              elementId: e.id,
+              severity: "warning",
+              message: `Slender: L/Ø = ${ratio.toFixed(0)} (> ${limit}); check buckling per ISO 22156.`,
+            });
+          }
+        }
+        if (hasLoad) {
+          flags.push({
+            elementId: e.id,
+            severity: "info",
+            message: `Load applied — capacity is NOT computed here; verify with a licensed engineer (ISO 22156).`,
+          });
+        }
+      }
+      const checks: CheckResult = {
+        flags,
+        summary: { checked: els.length, flagged: new Set(flags.filter((f) => f.severity === "warning").map((f) => f.elementId)).size },
+        disclaimer:
+          "Advisory sanity checks only — NOT a verified structural analysis. Geometric slenderness is flagged against a coarse ISO 22156 rule of thumb; member capacity, connections, and stability require a licensed structural engineer.",
+      };
+      return { out: els, checks };
+    },
+  },
   schedule: {
     type: "schedule", label: "Schedule", category: "Output",
     inputs: [
@@ -358,4 +420,4 @@ function replicate(
   return { out: outC };
 }
 
-export const CATEGORIES: NodeDef["category"][] = ["Geometry", "Bamboo", "Output"];
+export const CATEGORIES: NodeDef["category"][] = ["Geometry", "Bamboo", "Analysis", "Output"];

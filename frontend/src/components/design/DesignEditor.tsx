@@ -15,7 +15,7 @@ import {
 } from "@xyflow/react";
 import { GraphNode } from "./GraphNode";
 import { Viewport3D } from "./Viewport3D";
-import { SchedulePanel } from "./SchedulePanel";
+import { OutputPanel } from "./OutputPanel";
 import { NODE_DEFS, CATEGORIES } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
 import { EXAMPLES } from "@/lib/design/examples";
@@ -293,7 +293,7 @@ export function DesignEditor() {
             />
           </div>
           <div className="min-h-0 border-t border-bamboo-200 bg-white">
-            <SchedulePanel schedule={result.schedule} />
+            <OutputPanel schedule={result.schedule} checks={result.checks} />
           </div>
         </div>
       </div>

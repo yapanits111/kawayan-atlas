@@ -40,7 +40,20 @@ export type PortKind =
   | "curves"
   | "elements"
   | "joints"
-  | "schedule";
+  | "schedule"
+  | "checks";
+
+export interface CheckFlag {
+  elementId: string;
+  severity: "info" | "warning";
+  message: string;
+}
+
+export interface CheckResult {
+  flags: CheckFlag[];
+  summary: { checked: number; flagged: number };
+  disclaimer: string;
+}
 
 export interface ScheduleRow {
   id: string;

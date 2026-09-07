@@ -86,9 +86,28 @@ const columnRing: ExampleGraph = {
   edges: [e("e1", "circle", "div"), e("e2", "div", "ext"), e("e3", "ext", "culm"), e("e4", "culm", "sch")],
 };
 
+const checkedPosts: ExampleGraph = {
+  nodes: [
+    n("grid", "grid", 0, 40, { cols: 2, rows: 2, sx: 2, sy: 2 }),
+    n("ext", "extrude", 220, 40, { height: 3.2, axis: "y" }),
+    n("culm", "culm", 440, 40, { d0: 90, d1: 85 }),
+    n("load", "load", 440, 240, { value: 2 }),
+    n("check", "check", 660, 130, { slenderness: 30 }),
+    n("sch", "schedule", 880, 130),
+  ],
+  edges: [
+    e("e1", "grid", "ext"),
+    e("e2", "ext", "culm"),
+    e("e3", "culm", "check"),
+    e("e4", "load", "check", "out", "load"),
+    e("e5", "check", "sch"),
+  ],
+};
+
 export const EXAMPLES: { key: string; label: string; graph: ExampleGraph }[] = [
   { key: "vault", label: "Barrel vault", graph: vault },
   { key: "postbeam", label: "Post & beam frame", graph: postBeam },
   { key: "woven", label: "Woven screen", graph: wovenScreen },
   { key: "ring", label: "Column ring", graph: columnRing },
+  { key: "checked", label: "Checked posts (advisory)", graph: checkedPosts },
 ];

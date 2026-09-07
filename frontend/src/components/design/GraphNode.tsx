@@ -6,6 +6,7 @@ import { NODE_DEFS } from "@/lib/design/nodeDefs";
 const CAT_COLOR: Record<string, string> = {
   Geometry: "#538343",
   Bamboo: "#9a8248",
+  Analysis: "#8c4e2e",
   Output: "#a9623a",
 };
 
