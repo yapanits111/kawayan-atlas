@@ -1,6 +1,6 @@
 // Graph evaluation engine (whitepaper §6b): topological, dependency-ordered, live.
-import { NODE_DEFS } from "./nodeDefs";
-import type { CheckResult, Curve, Element, Joint, Schedule, Vec3 } from "./types";
+import { NODE_DEFS, type NodeCtx } from "./nodeDefs";
+import type { CheckResult, Curve, Element, InventoryReport, Joint, Schedule, Vec3 } from "./types";
 
 export interface GNode {
   id: string;
@@ -19,6 +19,7 @@ export interface EvalResult {
   scene: { elements: Element[]; curves: Curve[]; points: Vec3[]; joints: Joint[] };
   schedule: Schedule | null;
   checks: CheckResult | null;
+  inventory: InventoryReport | null;
   errors: Record<string, string>;
 }
 
@@ -55,6 +56,14 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
     }
   }
 
+  // Piece marks are allocated from one counter shared by the whole evaluation, so two
+  // culm nodes cannot both emit C1 (colliding marks get dropped by the collectors below).
+  const marks: Record<string, number> = {};
+  const ctxFor = (nodeId: string): NodeCtx => ({
+    nodeId,
+    nextId: (prefix) => `${prefix}${(marks[prefix] = (marks[prefix] ?? 0) + 1)}`,
+  });
+
   // Evaluate in order.
   for (const id of order) {
     const node = byId.get(id)!;
@@ -72,7 +81,7 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
       }
     }
     try {
-      outputs[id] = def.compute(resolved, node.data.params ?? {});
+      outputs[id] = def.compute(resolved, node.data.params ?? {}, ctxFor(id));
     } catch (err) {
       errors[id] = err instanceof Error ? err.message : "error";
       outputs[id] = {};
@@ -91,6 +100,7 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
   const jointsSeen = new Set<string>();
   let schedule: Schedule | null = null;
   let checks: CheckResult | null = null;
+  let inventory: InventoryReport | null = null;
 
   const pushElements = (v: unknown) => {
     if (Array.isArray(v)) {
@@ -117,6 +127,9 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
       } else if (port.kind === "checks") {
         const c = val as CheckResult | undefined;
         if (c && (!checks || c.flags.length > checks.flags.length)) checks = c;
+      } else if (port.kind === "inventory") {
+        const r = val as InventoryReport | undefined;
+        if (r && (!inventory || r.poles.length > inventory.poles.length)) inventory = r;
       } else if (port.kind === "joints") {
         if (Array.isArray(val))
           for (const j of val as Joint[])
@@ -139,5 +152,5 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
     }
   }
 
-  return { outputs, scene: { elements, curves, points, joints }, schedule, checks, errors };
+  return { outputs, scene: { elements, curves, points, joints }, schedule, checks, inventory, errors };
 }

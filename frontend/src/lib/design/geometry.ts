@@ -167,6 +167,110 @@ export function divide(curve: Curve, count: number): Vec3[] {
   return out;
 }
 
+/** Angle between two directions, in degrees. */
+export function angleBetween(a: Vec3, b: Vec3): number {
+  const la = len(a);
+  const lb = len(b);
+  if (la < 1e-9 || lb < 1e-9) return 0;
+  const c = Math.min(1, Math.max(-1, dot(a, b) / (la * lb)));
+  return (Math.acos(c) * 180) / Math.PI;
+}
+
+/** Point at a given arc length along a curve. */
+export function pointAtLength(curve: Curve, target: number): Vec3 {
+  const pts = curve.points;
+  if (pts.length === 0) return [0, 0, 0];
+  if (pts.length < 2) return pts[0];
+  let acc = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const segLen = len(sub(pts[i + 1], pts[i]));
+    if (acc + segLen >= target) {
+      const t = segLen < 1e-9 ? 0 : (target - acc) / segLen;
+      return lerp(pts[i], pts[i + 1], Math.min(1, Math.max(0, t)));
+    }
+    acc += segLen;
+  }
+  return pts[pts.length - 1];
+}
+
+/** The portion of a curve between two arc-length stations, keeping interior vertices
+ *  so curvature survives the cut. */
+export function subCurve(curve: Curve, from: number, to: number): Curve {
+  const pts = curve.points;
+  const out: Vec3[] = [pointAtLength(curve, from)];
+  let acc = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    acc += len(sub(pts[i + 1], pts[i]));
+    if (acc > from + 1e-9 && acc < to - 1e-9) out.push(pts[i + 1]);
+  }
+  out.push(pointAtLength(curve, to));
+  return { points: out };
+}
+
+/** Diaphragm (node) stations along a culm centreline at a fixed spacing, in metres.
+ *  Real culms carry nodes at intervals; §8 keeps that data in the model rather than
+ *  treating a culm as a clean tube. */
+export function nodeStations(curve: Curve, spacing: number): number[] {
+  if (spacing <= 1e-6) return [];
+  const total = curveLength(curve);
+  const out: number[] = [];
+  for (let s = spacing; s < total - 1e-6; s += spacing) out.push(s);
+  return out;
+}
+
+/** Split a curve at the given arc-length stations — the internode segments between nodes. */
+export function splitCurveAtLengths(curve: Curve, stations: number[]): Curve[] {
+  const total = curveLength(curve);
+  if (total < 1e-9) return [];
+  const cuts = [0, ...stations.filter((s) => s > 1e-6 && s < total - 1e-6), total];
+  const out: Curve[] = [];
+  for (let k = 0; k < cuts.length - 1; k++) out.push(subCurve(curve, cuts[k], cuts[k + 1]));
+  return out;
+}
+
+/** Closest approach between two 3D segments. Returns the midpoint of that approach when
+ *  the two pass within `tol` of each other, else null. Curves in space rarely meet
+ *  exactly, so a tolerance is the honest test. */
+function segmentApproach(p0: Vec3, p1: Vec3, q0: Vec3, q1: Vec3, tol: number): Vec3 | null {
+  const u = sub(p1, p0);
+  const v = sub(q1, q0);
+  const w = sub(p0, q0);
+  const a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w);
+  const den = a * c - b * b;
+  let s: number, t: number;
+  if (Math.abs(den) < 1e-12) {
+    // Parallel (or degenerate): fall back to projecting one start point onto the other.
+    s = 0;
+    t = c < 1e-12 ? 0 : e / c;
+  } else {
+    s = (b * e - c * d) / den;
+    t = (a * e - b * d) / den;
+  }
+  s = Math.min(1, Math.max(0, s));
+  t = Math.min(1, Math.max(0, t));
+  const pa = add(p0, scale(u, s));
+  const qa = add(q0, scale(v, t));
+  if (len(sub(pa, qa)) > tol) return null;
+  return scale(add(pa, qa), 0.5);
+}
+
+/** Intersection points between two sets of curves (whitepaper §7 Layer 1 `intersect`).
+ *  Coincident hits within `tol` collapse to one point. */
+export function intersectCurves(a: Curve[], b: Curve[], tol: number): Vec3[] {
+  const out: Vec3[] = [];
+  for (const ca of a) {
+    for (let i = 0; i < ca.points.length - 1; i++) {
+      for (const cb of b) {
+        for (let j = 0; j < cb.points.length - 1; j++) {
+          const hit = segmentApproach(ca.points[i], ca.points[i + 1], cb.points[j], cb.points[j + 1], tol);
+          if (hit && !out.some((o) => len(sub(o, hit)) < tol)) out.push(hit);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export function rotatePoint(p: Vec3, rxDeg: number, ryDeg: number, rzDeg: number): Vec3 {
   const rx = (rxDeg * Math.PI) / 180;
   const ry = (ryDeg * Math.PI) / 180;

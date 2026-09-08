@@ -92,6 +92,8 @@ export function DesignEditor() {
   const [canRedo, setCanRedo] = useState(false);
   const speciesInfo = useRef<Record<string, { d0: number; d1: number; wall: number }>>({});
   const [speciesOptions, setSpeciesOptions] = useState<{ value: string; label: string }[]>([]);
+  const jointLabels = useRef<Record<string, string>>({});
+  const [jointOptions, setJointOptions] = useState<{ value: string; label: string }[]>([]);
 
   // Pull the seeded atlas species so culm nodes can be bamboo-aware (auto-fill dims).
   useEffect(() => {
@@ -111,6 +113,17 @@ export function DesignEditor() {
         }
         speciesInfo.current = info;
         setSpeciesOptions(opts);
+      })
+      .catch(() => {});
+
+    // The joint library, so a `joint` node knows a fish-mouth from a bolt-through (§3).
+    api
+      .listJoints()
+      .then((all) => {
+        const labels: Record<string, string> = {};
+        for (const j of all) labels[j.id] = j.name;
+        jointLabels.current = labels;
+        setJointOptions(all.map((j) => ({ value: j.id, label: j.name })));
       })
       .catch(() => {});
   }, []);
@@ -182,6 +195,10 @@ export function DesignEditor() {
             params.d1 = info.d1;
             params.wall = info.wall;
           }
+          // Picking a joint type carries its library label through to the joint schedule.
+          if (key === "type" && typeof value === "string") {
+            params.typeLabel = jointLabels.current[value] ?? value;
+          }
           return { ...n, data: { ...n.data, params } };
         }),
       );
@@ -221,8 +238,8 @@ export function DesignEditor() {
 
   // Inject the param-updater into every node's data so custom nodes can edit params.
   const rfNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions } })),
-    [nodes, updateParam, deleteNode, duplicateNode, speciesOptions],
+    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions } })),
+    [nodes, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions],
   );
 
   const onConnect = useCallback(
@@ -356,7 +373,9 @@ export function DesignEditor() {
         el.kind === "culm"
           ? tubeGeometry(el.curve, (el.startDiameter ?? 80) / 2000, (el.endDiameter ?? 70) / 2000, 10)
           : stripGeometry(el.curve, (el.width ?? 25) / 1000, (el.thickness ?? 6) / 1000);
-      const mat = new THREE.MeshStandardMaterial({ color: el.kind === "culm" ? 0x9a8248 : 0xc2b184 });
+      const mat = new THREE.MeshStandardMaterial({
+        color: el.kind === "culm" ? 0x9a8248 : el.kind === "laminate" ? 0x8c6f3f : 0xc2b184,
+      });
       group.add(new THREE.Mesh(geo, mat));
     }
     if (group.children.length === 0) return;
@@ -373,7 +392,7 @@ export function DesignEditor() {
     // Z-up, so map (x, y, z) -> (x, z, y).
     const out: string[] = ["0", "SECTION", "2", "ENTITIES"];
     for (const el of result.scene.elements) {
-      const layer = el.kind === "culm" ? "CULM" : "STRIP";
+      const layer = el.kind === "culm" ? "CULM" : el.kind === "laminate" ? "LAMINATE" : "STRIP";
       const p = el.curve.points;
       for (let i = 0; i < p.length - 1; i++) {
         const a = p[i], b = p[i + 1];
@@ -531,7 +550,7 @@ export function DesignEditor() {
             />
           </div>
           <div className="min-h-0 border-t border-bamboo-200 bg-white">
-            <OutputPanel schedule={result.schedule} checks={result.checks} />
+            <OutputPanel schedule={result.schedule} checks={result.checks} inventory={result.inventory} />
           </div>
         </div>
       </div>
