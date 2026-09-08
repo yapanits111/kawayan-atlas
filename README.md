@@ -164,9 +164,17 @@ The frontend defaults to the API at `http://127.0.0.1:8020`. To point elsewhere,
 # backend (13 API tests, isolated temp database)
 cd backend && .venv/Scripts/python.exe -m pytest -q
 
+# frontend: Design Lab unit tests (geometry kernel, evaluation engine, pole reconciliation)
+cd frontend && npm test
+
 # frontend type-check + build
 cd frontend && npx tsc --noEmit && npm run build
 ```
+
+The Design Lab's pure core is unit-tested with [Vitest](https://vitest.dev/) (59 tests):
+the geometry kernel (`geometry.ts`), the dependency-ordered evaluation engine
+(`evaluate.ts`), and the pole-inventory reconciliation (`inventory.ts`). Run `npm run
+test:watch` for watch mode.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the backend tests plus the
 frontend type-check and build on every push / PR (assumes `kawayan-atlas/` is the repo root).
