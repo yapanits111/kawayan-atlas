@@ -361,7 +361,9 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **type** | type | `(none)` | from the joint library |
+| **mode** | typing | `auto` | `auto` / `manual` |
+| **type** | type (manual) | `(none)` | from the joint library |
+| **splice** | splice° (bolt ≥) | `150` | min 90, max 180 |
 | **tol** | tolerance (m) | `0.05` | min 0.001 |
 
 #### `bundle` — Bundle

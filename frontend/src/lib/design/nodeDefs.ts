@@ -73,9 +73,32 @@ function curvesOf(v: unknown): Curve[] {
 }
 const num = (p: Record<string, number | string>, k: string) => Number(p[k]);
 
-/** Joint-library ids whose geometry actually cuts the member (a saddle over the mating
- *  culm) rather than butting square against it. */
-const MITRE_JOINTS = new Set(["fish-mouth"]);
+/** The seeded joint library (backend/app/seed_data/joints.json), with the one property the
+ *  geometry cares about: `mitred` — whether the connection saddle-cuts the member to the
+ *  mating angle (only the fish-mouth does). Every other type butts square and is held by a
+ *  tie, dowel, bolt, mortar plug or strap (whitepaper §3). */
+const JOINT_LIBRARY: Record<string, { label: string; mitred: boolean }> = {
+  "fish-mouth": { label: "Fish-Mouth (Saddle) Joint", mitred: true },
+  bolted: { label: "Bolted Joint", mitred: false },
+  "bolted-mortar-plug": { label: "Bolted + Mortar-Plug Joint", mitred: false },
+  "lashing-tie": { label: "Traditional Lashing (Rattan / Palm-fiber Tie)", mitred: false },
+  "pin-dowel": { label: "Pin / Dowel Joint", mitred: false },
+  "steel-strap-gusset": { label: "Steel-Strap / Gusset Joint", mitred: false },
+};
+
+/** Advisory geometric typing of a joint — the whitepaper's claim that a `joint` node
+ *  "already knows a fish-mouth cut from a bolt-through connection" (§3). Decided purely
+ *  from how many members meet and the angle between them:
+ *   - 3+ members         → a hub carrying load every way: bolted + mortar-plug node.
+ *   - 2 members, ~inline → an end-to-end continuation (angle ≥ spliceDeg): a bolted splice.
+ *   - 2 members, angled  → the incoming culm is fish-mouth (saddle) cut to seat on the other.
+ *  A starting point for detailing, never a connection design — the schedule says as much. */
+function classifyJoint(members: number, angle: number | undefined, spliceDeg: number): string {
+  if (members >= 3) return "bolted-mortar-plug";
+  if (angle === undefined) return "bolted"; // parallel/indeterminate → safe positive fixing
+  if (angle >= spliceDeg) return "bolted"; // near-collinear splice
+  return "fish-mouth"; // members meet at an angle → saddle
+}
 
 /** A small worked yard so the node reconciles something the moment it is dropped in.
  *  Format per line: id, length_m, Ø base_mm, Ø tip_mm. */
@@ -419,16 +442,20 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { id: "joints", label: "joints", kind: "joints" },
     ],
     params: [
-      { key: "type", label: "type", default: "", dynamic: "joints" },
+      { key: "mode", label: "typing", default: "auto", options: ["auto", "manual"] },
+      { key: "type", label: "type (manual)", default: "", dynamic: "joints" },
+      { key: "splice", label: "splice° (bolt ≥)", default: 150, min: 90, max: 180, step: 5 },
       { key: "tol", label: "tolerance (m)", default: 0.05, min: 0.001, step: 0.01 },
     ],
     compute: (i, p) => {
       const els = asElements(i.in);
       const tol = num(p, "tol");
-      const typeId = String(p.type ?? "");
-      // Only saddle (fish-mouth) joints cut the member to the mating culm; the rest are
-      // square butts held by a tie, dowel, bolt or strap (§3).
-      const mitred = MITRE_JOINTS.has(typeId);
+      // In "auto" the connection is typed from each joint's geometry (fish-mouth vs bolt);
+      // in "manual" every joint takes the hand-picked library type. Only a saddle
+      // (fish-mouth) cut shapes the member to the mating culm; the rest butt square (§3).
+      const auto = String(p.mode ?? "auto") !== "manual";
+      const spliceDeg = num(p, "splice");
+      const manualType = String(p.type ?? "");
 
       type End = { el: number; at: "start" | "end"; pos: Vec3; dir: Vec3 };
       const ends: End[] = [];
@@ -475,12 +502,19 @@ export const NODE_DEFS: Record<string, NodeDef> = {
           }
         }
         const memberIds = Array.from(new Set(cluster.map((k) => els[ends[k].el].id)));
+
+        // Type this specific joint: auto from its geometry, or the hand-picked type.
+        const typeId = auto ? classifyJoint(memberIds.length, angle, spliceDeg) : manualType;
+        const lib = JOINT_LIBRARY[typeId];
+        const typeLabel = typeId ? lib?.label ?? String(p.typeLabel ?? typeId) : undefined;
+        const mitred = lib?.mitred ?? false;
+
         joints.push({
           id: `J${joints.length + 1}`,
           position: centre,
           count: cluster.length,
           type: typeId || undefined,
-          typeLabel: typeId ? String(p.typeLabel ?? typeId) : undefined,
+          typeLabel,
           angle: angle === undefined ? undefined : Math.round(angle),
           memberIds,
         });

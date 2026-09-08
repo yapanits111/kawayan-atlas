@@ -38,7 +38,7 @@ const postBeam: ExampleGraph = {
     n("trans", "transform", 220, 240, { ty: 2.5 }),
     n("culmB", "culm", 440, 240, { d0: 100, d1: 100 }),
     n("bundle", "bundle", 660, 130),
-    n("joint", "joint", 860, 130, { tol: 0.2, type: "fish-mouth", typeLabel: "Fish-Mouth (Saddle) Joint" }),
+    n("joint", "joint", 860, 130, { tol: 0.2 }), // auto-typed: posts meeting the beam saddle, the ridge splices bolt
     n("sch", "schedule", 1060, 130),
   ],
   edges: [

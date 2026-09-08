@@ -96,15 +96,19 @@ describe("evaluateGraph — piece marks are unique across the whole graph", () =
 });
 
 describe("evaluateGraph — joints", () => {
-  it("clusters coincident element ends and reports them in the joint schedule", () => {
-    // Two lines meeting at the origin at 90 degrees -> one joint of 2 members.
+  // Two members meeting at the origin, wired through a joint into a schedule.
+  function twoMemberJoint(
+    dirB: { bx: number; by: number; bz: number },
+    aEnd: { bx: number; by: number; bz: number },
+    jointParams: Record<string, number | string> = {},
+  ) {
     const nodes = [
-      node("lnA", "line", { ax: 0, ay: 0, az: 0, bx: 2, by: 0, bz: 0 }),
+      node("lnA", "line", { ax: 0, ay: 0, az: 0, ...aEnd }),
       node("cuA", "culm"),
-      node("lnB", "line", { ax: 0, ay: 0, az: 0, bx: 0, by: 2, bz: 0 }),
+      node("lnB", "line", { ax: 0, ay: 0, az: 0, ...dirB }),
       node("cuB", "culm"),
       node("bn", "bundle"),
-      node("jt", "joint", { tol: 0.05, type: "fish-mouth", typeLabel: "Fish-Mouth" }),
+      node("jt", "joint", jointParams),
       node("sc", "schedule"),
     ];
     const edges = [
@@ -116,13 +120,70 @@ describe("evaluateGraph — joints", () => {
       edge("jt", "sc", "out", "in"),
       edge("jt", "sc", "joints", "joints"),
     ];
-    const r = evaluateGraph(nodes, edges);
+    return evaluateGraph(nodes, edges);
+  }
+
+  it("clusters coincident ends and reports the joint in the schedule", () => {
+    const r = twoMemberJoint({ bx: 0, by: 2, bz: 0 }, { bx: 2, by: 0, bz: 0 });
     expect(r.scene.joints).toHaveLength(1);
     expect(r.scene.joints[0].count).toBe(2);
     expect(r.scene.joints[0].angle).toBe(90);
     expect(r.schedule!.joints).toHaveLength(1);
-    expect(r.schedule!.joints[0].type).toBe("Fish-Mouth");
     expect(r.schedule!.totals.jointCount).toBe(1);
+  });
+
+  it("auto-types an angled 2-member meeting as a fish-mouth saddle (and mitres it)", () => {
+    // Members at 90 degrees -> below the splice threshold -> saddle.
+    const r = twoMemberJoint({ bx: 0, by: 2, bz: 0 }, { bx: 2, by: 0, bz: 0 });
+    const j = r.scene.joints[0];
+    expect(j.type).toBe("fish-mouth");
+    expect(j.typeLabel).toBe("Fish-Mouth (Saddle) Joint");
+    // a mitred joint carries its angle onto the meeting member ends
+    const mitredRows = r.schedule!.rows.filter((row) => row.cut_start_deg === 90 || row.cut_end_deg === 90);
+    expect(mitredRows.length).toBeGreaterThan(0);
+  });
+
+  it("auto-types a near-collinear 2-member meeting as a bolted splice (no mitre)", () => {
+    // A goes -x from the joint, B goes +x -> ~180 degrees -> inline splice.
+    const r = twoMemberJoint({ bx: 2, by: 0, bz: 0 }, { bx: -2, by: 0, bz: 0 });
+    const j = r.scene.joints[0];
+    expect(j.angle).toBe(180);
+    expect(j.type).toBe("bolted");
+    expect(j.typeLabel).toBe("Bolted Joint");
+  });
+
+  it("auto-types a 3+ member hub as a bolted + mortar-plug node", () => {
+    // A line fanned into three by a polar array all share the origin end.
+    const nodes = [
+      node("ln", "line", { ax: 0, ay: 0, az: 0, bx: 1, by: 0, bz: 0 }),
+      node("ar", "arrayPolar", { count: 3, total: 360, axis: "y" }),
+      node("cu", "culm"),
+      node("jt", "joint", { tol: 0.05 }),
+      node("sc", "schedule"),
+    ];
+    const edges = [
+      edge("ln", "ar"),
+      edge("ar", "cu"),
+      edge("cu", "jt"),
+      edge("jt", "sc", "out", "in"),
+      edge("jt", "sc", "joints", "joints"),
+    ];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.scene.joints).toHaveLength(1);
+    expect(r.scene.joints[0].count).toBe(3);
+    expect(r.scene.joints[0].type).toBe("bolted-mortar-plug");
+  });
+
+  it("manual mode applies the hand-picked library type to every joint", () => {
+    const r = twoMemberJoint(
+      { bx: 0, by: 2, bz: 0 },
+      { bx: 2, by: 0, bz: 0 },
+      { mode: "manual", type: "lashing-tie" },
+    );
+    const j = r.scene.joints[0];
+    expect(j.type).toBe("lashing-tie");
+    expect(j.typeLabel).toBe("Traditional Lashing (Rattan / Palm-fiber Tie)");
+    expect(r.schedule!.joints[0].type).toBe("Traditional Lashing (Rattan / Palm-fiber Tie)");
   });
 });
 
