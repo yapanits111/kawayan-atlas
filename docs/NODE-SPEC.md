@@ -126,6 +126,24 @@ arc → divide → culm → array → schedule
 | **by** | B.y | `0` | — |
 | **bz** | B.z | `0` | — |
 
+#### `polyline` — Polyline (curve)
+
+| | |
+|---|---|
+| **Inputs** | `in` points *(points)* |
+| **Outputs** | `out` curve *(curve)* |
+
+| Param | Label | Default | Range |
+|---|---|---|---|
+| **pts** | points | `# x, y, z per line — a freeform curve through these points
+-3, 0, 0
+-1.5, 1.4, 0
+0, 1.9, 0
+1.5, 1.4, 0
+3, 0, 0` | — |
+| **closed** | closed | `no` | `no` / `yes` |
+| **smooth** | smooth | `12` | min 0, max 40 |
+
 #### `arc` — Arc
 
 | | |

@@ -154,8 +154,21 @@ export interface JointRow {
   z: number;
 }
 
+/** Identical pieces collapsed into one line — the buildable bill of materials a fabricator
+ *  actually orders and cuts from (§8: a "fabrication-ready" cut-list, not a row per stick). */
+export interface ScheduleGroup {
+  kind: string;
+  detail: string; // the section / taper shared by every piece in the group
+  length_m: number; // each piece's length
+  count: number; // how many identical pieces
+  totalLength_m: number; // count × length
+  layup?: string;
+  verification?: Verification;
+}
+
 export interface Schedule {
   rows: ScheduleRow[];
+  groups: ScheduleGroup[];
   joints: JointRow[];
   totals: { count: number; totalLength_m: number; estCulms: number; jointCount: number };
 }

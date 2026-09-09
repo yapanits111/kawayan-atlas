@@ -49,6 +49,77 @@ describe("evaluateGraph — the proof chain", () => {
   });
 });
 
+describe("evaluateGraph — freeform polyline curve", () => {
+  it("threads a curve through the hand-typed point list and sweeps culms along it", () => {
+    const nodes = [
+      node("poly", "polyline", { smooth: 8 }),
+      node("dv", "divide", { count: 10 }),
+      node("cu", "culm"),
+      node("sc", "schedule"),
+    ];
+    const edges = [edge("poly", "dv"), edge("dv", "cu"), edge("cu", "sc")];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.errors).toEqual({});
+    expect(r.schedule!.rows.length).toBeGreaterThan(0);
+    expect(r.schedule!.rows.every((row) => row.kind === "culm")).toBe(true);
+  });
+
+  it("prefers wired-in points (grid) over the typed list", () => {
+    const nodes = [
+      node("gr", "grid", { cols: 4, rows: 1, sx: 1, sy: 1 }),
+      node("poly", "polyline", { smooth: 0 }),
+      node("cu", "culm"),
+      node("sc", "schedule"),
+    ];
+    const edges = [edge("gr", "poly"), edge("poly", "cu"), edge("cu", "sc")];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.errors).toEqual({});
+    // 4 gridded points -> one polyline -> one culm along it
+    expect(r.schedule!.rows).toHaveLength(1);
+    expect(r.schedule!.rows[0].kind).toBe("culm");
+  });
+});
+
+describe("evaluateGraph — bill of materials grouping", () => {
+  it("collapses identical arrayed pieces into one quantity line", () => {
+    const nodes = [
+      node("ln", "line", { ax: 0, ay: 0, az: 0, bx: 4, by: 0, bz: 0 }),
+      node("cu", "culm"),
+      node("ar", "arrayLinear", { count: 4, dx: 0, dy: 0, dz: 1 }),
+      node("sc", "schedule"),
+    ];
+    const edges = [edge("ln", "cu"), edge("cu", "ar"), edge("ar", "sc")];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.schedule!.rows).toHaveLength(4); // four individual pieces
+    expect(r.schedule!.groups).toHaveLength(1); // one orderable line
+    expect(r.schedule!.groups[0].count).toBe(4);
+    expect(r.schedule!.groups[0].length_m).toBeCloseTo(4, 6);
+    expect(r.schedule!.groups[0].totalLength_m).toBeCloseTo(16, 6);
+  });
+
+  it("keeps differently-sized pieces in separate groups", () => {
+    // Two culm chains of different lengths -> two groups.
+    const nodes = [
+      node("lnA", "line", { ax: 0, ay: 0, az: 0, bx: 3, by: 0, bz: 0 }),
+      node("cuA", "culm"),
+      node("lnB", "line", { ax: 0, ay: 1, az: 0, bx: 5, by: 1, bz: 0 }),
+      node("cuB", "culm"),
+      node("bn", "bundle"),
+      node("sc", "schedule"),
+    ];
+    const edges = [
+      edge("lnA", "cuA"),
+      edge("lnB", "cuB"),
+      edge("cuA", "bn", "out", "a"),
+      edge("cuB", "bn", "out", "b"),
+      edge("bn", "sc"),
+    ];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.schedule!.groups).toHaveLength(2);
+    expect(r.schedule!.groups.every((g) => g.count === 1)).toBe(true);
+  });
+});
+
 describe("evaluateGraph — dependency ordering", () => {
   it("evaluates producers before consumers regardless of array order", () => {
     // Deliberately scrambled: consumer listed before its producers.

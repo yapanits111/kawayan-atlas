@@ -85,6 +85,61 @@ describe("curve constructors", () => {
   });
 });
 
+describe("parsePoints", () => {
+  it("parses `x, y, z` per line and ignores comments/blanks", () => {
+    expect(G.parsePoints("# head\n0,0,0\n\n1, 2, 3\n# note")).toEqual([
+      [0, 0, 0],
+      [1, 2, 3],
+    ]);
+  });
+  it("accepts whitespace separators and skips short/invalid lines", () => {
+    expect(G.parsePoints("1 2 3\n4 5\nfoo bar baz")).toEqual([[1, 2, 3]]);
+  });
+});
+
+describe("polyline (freeform curve)", () => {
+  const pts: Vec3[] = [[0, 0, 0], [1, 0, 0], [2, 0, 0]];
+
+  it("returns the control points unchanged when not smoothed", () => {
+    expect(G.polyline(pts, false, 0).points).toEqual(pts);
+  });
+
+  it("closes the loop by repeating the first point", () => {
+    const c = G.polyline(pts, true, 0);
+    expect(c.points[c.points.length - 1]).toEqual([0, 0, 0]);
+    expect(c.points).toHaveLength(4);
+  });
+
+  it("returns a copy for fewer than 2 points", () => {
+    expect(G.polyline([[5, 5, 5]], false, 10).points).toEqual([[5, 5, 5]]);
+  });
+
+  it("smoothing passes through every control point", () => {
+    const c = G.polyline(pts, false, 4);
+    // first and last control points are hit exactly
+    expect(c.points[0]).toEqual([0, 0, 0]);
+    expect(c.points[c.points.length - 1]).toEqual([2, 0, 0]);
+    // the middle control point appears among the samples
+    expect(c.points.some((p) => p[0] === 1 && p[1] === 0 && p[2] === 0)).toBe(true);
+    // segs(2) * div(5) + 1
+    expect(c.points).toHaveLength(2 * 5 + 1);
+  });
+
+  it("smoothing a straight control polygon stays straight and monotonic", () => {
+    const c = G.polyline(pts, false, 6);
+    expect(c.points.every((p) => p[1] === 0 && p[2] === 0)).toBe(true);
+    for (let i = 1; i < c.points.length; i++) {
+      expect(c.points[i][0]).toBeGreaterThanOrEqual(c.points[i - 1][0]);
+    }
+  });
+
+  it("a smoothed closed curve returns to its start", () => {
+    const square: Vec3[] = [[0, 0, 0], [2, 0, 0], [2, 0, 2], [0, 0, 2]];
+    const c = G.polyline(square, true, 5);
+    expect(c.points[0]).toEqual(c.points[c.points.length - 1]);
+  });
+});
+
 describe("curveLength", () => {
   it("measures a straight segment", () => {
     expect(G.curveLength(line2([0, 0, 0], [3, 4, 0]))).toBe(5);

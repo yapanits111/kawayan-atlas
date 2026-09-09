@@ -74,6 +74,57 @@ export function rectangle(w: number, d: number, plane: "xy" | "xz" | "yz"): Curv
   return { points };
 }
 
+/** Parse a hand-typed point list — one `x, y, z` per line; commas or whitespace separate,
+ *  blank lines and `#` comments are ignored. Lines without three finite numbers are skipped. */
+export function parsePoints(text: string): Vec3[] {
+  const out: Vec3[] = [];
+  for (const raw of String(text ?? "").split("\n")) {
+    const line = raw.split("#")[0].trim();
+    if (!line) continue;
+    const n = line.split(/[,\s]+/).filter(Boolean).map(Number);
+    if (n.length >= 3 && n.slice(0, 3).every((v) => Number.isFinite(v))) out.push([n[0], n[1], n[2]]);
+  }
+  return out;
+}
+
+/** One point on a uniform Catmull-Rom spline segment p1→p2 (p0,p3 are the neighbours). */
+function catmull(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: number): Vec3 {
+  const t2 = t * t, t3 = t2 * t;
+  const f = (a: number, b: number, c: number, d: number) =>
+    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+  return [
+    f(p0[0], p1[0], p2[0], p3[0]),
+    f(p0[1], p1[1], p2[1], p3[1]),
+    f(p0[2], p1[2], p2[2], p3[2]),
+  ];
+}
+
+/** A freeform curve through an ordered point list — the whitepaper's Layer-1 "curve"
+ *  primitive (§7), the thing that lets a user model forms that have no name (§4). Optionally
+ *  closed (the last control point joins the first) and optionally smoothed with a Catmull-Rom
+ *  spline so real culm/arch curvature survives rather than a faceted polygon. `smooth` is the
+ *  number of samples inserted between each pair of control points (0 = straight segments).
+ *  The spline passes through every control point. */
+export function polyline(pts: Vec3[], closed = false, smooth = 0): Curve {
+  const ctrl = pts.slice();
+  if (ctrl.length < 2) return { points: ctrl };
+  const between = Math.max(0, Math.floor(smooth));
+  if (between < 1) return { points: closed ? [...ctrl, ctrl[0]] : ctrl };
+
+  const n = ctrl.length;
+  const div = between + 1;
+  const P = (i: number): Vec3 =>
+    closed ? ctrl[((i % n) + n) % n] : ctrl[Math.min(n - 1, Math.max(0, i))];
+  const points: Vec3[] = [];
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    for (let s = 0; s < div; s++) points.push(catmull(p0, p1, p2, p3, s / div));
+  }
+  points.push(closed ? P(0) : P(n - 1));
+  return { points };
+}
+
 /** Extrude points into straight lines (columns/posts) of a given height along an axis. */
 export function extrudePoints(points: Vec3[], height: number, axis: "x" | "y" | "z"): Curve[] {
   const dir: Vec3 = axis === "x" ? [height, 0, 0] : axis === "z" ? [0, 0, height] : [0, height, 0];

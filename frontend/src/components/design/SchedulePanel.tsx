@@ -3,11 +3,27 @@
 import { VERIFICATION_LABEL, type Schedule } from "@/lib/design/types";
 
 function toCSV(schedule: Schedule): string {
+  const lines: string[] = [];
+  // Bill of materials first — the orderable summary.
+  if (schedule.groups.length) {
+    lines.push("# Bill of materials");
+    lines.push(["qty", "kind", "length_m", "detail", "total_length_m", "verification"].join(","));
+    for (const g of schedule.groups) {
+      lines.push(
+        [
+          g.count, g.kind, g.length_m, `"${g.detail}"`, g.totalLength_m,
+          `"${g.verification ? VERIFICATION_LABEL[g.verification] : ""}"`,
+        ].join(","),
+      );
+    }
+    lines.push("");
+    lines.push("# Element cut-list");
+  }
   const header = [
     "id", "kind", "length_m", "detail", "nodes", "layup", "verification",
     "cut_start_deg", "cut_end_deg",
   ];
-  const lines = [header.join(",")];
+  lines.push(header.join(","));
   for (const r of schedule.rows) {
     lines.push(
       [
@@ -38,6 +54,14 @@ function toCSV(schedule: Schedule): string {
 
 function scheduleHTML(schedule: Schedule): string {
   const engineered = schedule.rows.some((r) => r.verification === "outside-iso22156");
+  const bom = schedule.groups
+    .map(
+      (g) =>
+        `<tr><td>${g.count}×</td><td>${g.kind}</td><td>${g.length_m} m</td>` +
+        `<td>${g.detail}${g.layup ? `<br><span class="sub">${g.layup}</span>` : ""}</td>` +
+        `<td>${g.totalLength_m} m</td></tr>`,
+    )
+    .join("");
   const rows = schedule.rows
     .map(
       (r) =>
@@ -62,6 +86,10 @@ function scheduleHTML(schedule: Schedule): string {
     </style></head><body>
     <h1>🎋 Kawayan Atlas — Fabrication cut-list</h1>
     <div class="totals">${schedule.totals.count} elements · ${schedule.totals.totalLength_m} m total${schedule.totals.jointCount > 0 ? ` · ${schedule.totals.jointCount} joints` : ""}${schedule.totals.estCulms > 0 ? ` · ~${schedule.totals.estCulms} culms` : ""}</div>
+    ${bom ? `<h2>Bill of materials</h2>
+    <table><thead><tr><th>Qty</th><th>Kind</th><th>Length</th><th>Detail</th><th>Total</th></tr></thead>
+    <tbody>${bom}</tbody></table>
+    <h2>Element cut-list</h2>` : ""}
     <table><thead><tr><th>ID</th><th>Kind</th><th>Length</th><th>Detail</th><th>Nodes</th><th>Cut start°</th><th>Cut end°</th></tr></thead>
     <tbody>${rows}</tbody></table>
     ${schedule.joints.length ? `<h2>Joint schedule</h2>
@@ -145,6 +173,51 @@ export function SchedulePanel({ schedule }: { schedule: Schedule | null }) {
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
+            {schedule.groups.length > 0 && (
+              <>
+                <div className="border-b border-bamboo-200 bg-bamboo-50 px-3 py-1.5 text-xs font-semibold text-leaf-800">
+                  Bill of materials
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-bamboo-50 text-bamboo-500">
+                    <tr>
+                      <th className="px-3 py-1.5">Qty</th>
+                      <th className="px-2 py-1.5">Kind</th>
+                      <th className="px-2 py-1.5">Length</th>
+                      <th className="px-2 py-1.5">Detail</th>
+                      <th className="px-2 py-1.5">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schedule.groups.map((g, idx) => (
+                      <tr key={idx} className="border-t border-bamboo-100">
+                        <td className="px-3 py-1 font-semibold tabular-nums text-leaf-800">{g.count}×</td>
+                        <td className="px-2 py-1 capitalize">
+                          {g.kind}
+                          {g.verification === "outside-iso22156" && (
+                            <span
+                              title={VERIFICATION_LABEL["outside-iso22156"]}
+                              className="ml-1 rounded bg-bamboo-100 px-1 text-[10px] font-semibold normal-case text-clay-600"
+                            >
+                              no code
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 tabular-nums">{g.length_m} m</td>
+                        <td className="px-2 py-1 text-bamboo-700">
+                          {g.detail}
+                          {g.layup && <div className="text-[10px] text-bamboo-500">{g.layup}</div>}
+                        </td>
+                        <td className="px-2 py-1 tabular-nums text-bamboo-600">{g.totalLength_m} m</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="border-t border-bamboo-200 bg-bamboo-50 px-3 py-1.5 text-xs font-semibold text-leaf-800">
+                  Element cut-list
+                </div>
+              </>
+            )}
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-bamboo-50 text-bamboo-500">
                 <tr>

@@ -174,8 +174,22 @@ const yardCheck: ExampleGraph = {
   edges: [e("e1", "grid", "ext"), e("e2", "ext", "culm"), e("e3", "culm", "inv"), e("e4", "inv", "sch")],
 };
 
+// A freeform curve drawn by hand, smoothed into an arch, then culm-swept — the whitepaper's
+// "forms that have no name" (§4) reached through the Layer-1 `curve` primitive.
+const freeformArch: ExampleGraph = {
+  nodes: [
+    n("poly", "polyline", 0, 40, { closed: "no", smooth: 14 }),
+    n("div", "divide", 250, 40, { count: 12 }),
+    n("culm", "culm", 490, 40, { d0: 90, d1: 72, nodes: 0.3 }),
+    n("arr", "arrayLinear", 730, 40, { count: 3, dx: 0, dy: 0, dz: 1.4 }),
+    n("sch", "schedule", 970, 40),
+  ],
+  edges: [e("e1", "poly", "div"), e("e2", "div", "culm"), e("e3", "culm", "arr"), e("e4", "arr", "sch")],
+};
+
 export const EXAMPLES: { key: string; label: string; graph: ExampleGraph }[] = [
   { key: "vault", label: "Barrel vault", graph: vault },
+  { key: "freeform", label: "Freeform arch (curve)", graph: freeformArch },
   { key: "shell", label: "Lofted shell", graph: loftedShell },
   { key: "postbeam", label: "Post & beam frame", graph: postBeam },
   { key: "woven", label: "Woven screen", graph: wovenScreen },

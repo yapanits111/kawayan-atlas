@@ -1,5 +1,5 @@
 // Node registry — every node's inputs, outputs, params, and compute (whitepaper §7).
-import type { Vec3, Curve, Element, Joint, JointRow, PortKind, Schedule, ScheduleRow, CheckFlag, CheckResult } from "./types";
+import type { Vec3, Curve, Element, Joint, JointRow, PortKind, Schedule, ScheduleGroup, ScheduleRow, CheckFlag, CheckResult } from "./types";
 import * as G from "./geometry";
 import { parsePoles, reconcile } from "./inventory";
 
@@ -114,6 +114,16 @@ const DEFAULT_POLES = [
   "P8, 4.5, 85, 66",
 ].join("\n");
 
+/** A gentle arch so the freeform curve draws something the moment it is dropped in. */
+const DEFAULT_POLY = [
+  "# x, y, z per line — a freeform curve through these points",
+  "-3, 0, 0",
+  "-1.5, 1.4, 0",
+  "0, 1.9, 0",
+  "1.5, 1.4, 0",
+  "3, 0, 0",
+].join("\n");
+
 // --- node definitions ---
 export const NODE_DEFS: Record<string, NodeDef> = {
   point: {
@@ -134,6 +144,24 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { key: "bx", label: "B.x", default: 2, step: 0.1 }, { key: "by", label: "B.y", default: 0, step: 0.1 }, { key: "bz", label: "B.z", default: 0, step: 0.1 },
     ],
     compute: (_i, p) => ({ out: G.line([num(p, "ax"), num(p, "ay"), num(p, "az")], [num(p, "bx"), num(p, "by"), num(p, "bz")], 2) }),
+  },
+  polyline: {
+    type: "polyline", label: "Polyline (curve)", category: "Geometry",
+    inputs: [{ id: "in", label: "points", kind: "points" }],
+    outputs: [{ id: "out", label: "curve", kind: "curve" }],
+    params: [
+      { key: "pts", label: "points", multiline: true, default: DEFAULT_POLY },
+      { key: "closed", label: "closed", default: "no", options: ["no", "yes"] },
+      { key: "smooth", label: "smooth", default: 12, min: 0, max: 40, step: 1 },
+    ],
+    compute: (i, p) => {
+      // A wired-in point list (from grid, divide, intersect …) wins; otherwise thread the
+      // curve through the hand-typed list — so you can draw a form by hand or fit one to
+      // computed points (§4, §7).
+      const wired = Array.isArray(i.in) && i.in.length && isVec3(i.in[0]) ? (i.in as Vec3[]) : null;
+      const pts = wired ?? G.parsePoints(String(p.pts ?? ""));
+      return { out: G.polyline(pts, p.closed === "yes", num(p, "smooth")) };
+    },
   },
   arc: {
     type: "arc", label: "Arc", category: "Geometry",
@@ -657,12 +685,33 @@ export const NODE_DEFS: Record<string, NodeDef> = {
         z: round(j.position[2]),
       }));
 
+      // Bill of materials — identical pieces collapsed into one orderable line (§8). A
+      // builder cuts "6 × 2.5 m Ø90→75", not six separate sticks.
+      const groupMap = new Map<string, ScheduleGroup>();
+      for (const r of rows) {
+        const key = [r.kind, r.detail, r.length_m, r.layup ?? "", r.verification ?? ""].join("|");
+        const g = groupMap.get(key);
+        if (g) {
+          g.count += 1;
+          g.totalLength_m = round(g.totalLength_m + r.length_m);
+        } else {
+          groupMap.set(key, {
+            kind: r.kind, detail: r.detail, length_m: r.length_m,
+            count: 1, totalLength_m: r.length_m, layup: r.layup, verification: r.verification,
+          });
+        }
+      }
+      const groups = Array.from(groupMap.values()).sort(
+        (a, b) => b.count - a.count || b.totalLength_m - a.totalLength_m,
+      );
+
       const totalLength = els.reduce((s, e) => s + e.length, 0);
       // Only round-culm elements are cut from whole poles; processed stock has its own
       // yield question, so counting it here would overstate the pole order.
       const culmLength = els.reduce((s, e) => (e.kind === "culm" ? s + e.length : s), 0);
       const schedule: Schedule = {
         rows,
+        groups,
         joints: jointRows,
         totals: {
           count: els.length,
