@@ -85,6 +85,7 @@ export function DesignEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const idCounter = useRef(100);
+  const clipboard = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const restored = useRef(false);
@@ -245,6 +246,50 @@ export function DesignEditor() {
     [setNodes],
   );
 
+  // Copy the current selection (nodes + the edges wholly inside it) to an in-memory
+  // clipboard, so a subgraph can be replicated as a unit.
+  const copySelection = useCallback(() => {
+    const sel = nodes.filter((n) => n.selected);
+    if (!sel.length) return;
+    const ids = new Set(sel.map((n) => n.id));
+    clipboard.current = {
+      nodes: sel.map((n) => ({
+        ...n,
+        data: { type: (n.data as { type: string }).type, params: { ...(n.data as { params: object }).params } },
+      })) as Node[],
+      edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({ ...e })),
+    };
+  }, [nodes, edges]);
+
+  // Paste the clipboard: fresh ids, an offset, internal edges rewired to the new ids, and
+  // the copies left selected so the next paste steps further along (and they move as a group).
+  const pasteClipboard = useCallback(() => {
+    const clip = clipboard.current;
+    if (!clip || clip.nodes.length === 0) return;
+    const OFFSET = 48;
+    const idMap = new Map<string, string>();
+    const newNodes: Node[] = clip.nodes.map((n) => {
+      const type = (n.data as { type: string }).type;
+      const id = `${type}-${idCounter.current++}`;
+      idMap.set(n.id, id);
+      return {
+        id,
+        type: "graphNode",
+        position: { x: n.position.x + OFFSET, y: n.position.y + OFFSET },
+        selected: true,
+        data: { type, params: { ...(n.data as { params: object }).params } },
+      } as Node;
+    });
+    const newEdges: Edge[] = clip.edges.map((e) => ({
+      ...e,
+      id: `e-${idCounter.current++}`,
+      source: idMap.get(e.source)!,
+      target: idMap.get(e.target)!,
+    }));
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...newNodes]);
+    setEdges((es) => [...es, ...newEdges]);
+  }, [setNodes, setEdges]);
+
   // Inject the param-updater into every node's data so custom nodes can edit params.
   const rfNodes = useMemo(
     () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions } })),
@@ -345,7 +390,8 @@ export function DesignEditor() {
     setCanRedo(h.index < h.stack.length - 1);
   }, [applySnap]);
 
-  // Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo (not while typing).
+  // Keyboard: Ctrl/Cmd+Z undo, +Shift+Z / +Y redo, +C copy selection, +V paste
+  // (all suppressed while typing in a field, so native copy/paste still works there).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -359,11 +405,15 @@ export function DesignEditor() {
       } else if ((key === "z" && e.shiftKey) || key === "y") {
         e.preventDefault();
         redo();
+      } else if (key === "c") {
+        copySelection();
+      } else if (key === "v") {
+        pasteClipboard();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  }, [undo, redo, copySelection, pasteClipboard]);
 
   // Live evaluation (dependency-ordered) — recomputes on any node/edge change.
   const result = useMemo(() => {
@@ -430,7 +480,7 @@ export function DesignEditor() {
       <div className="flex items-center gap-3 border-b border-bamboo-200 bg-bamboo-50 px-4 py-2">
         <span className="font-display text-lg font-semibold text-leaf-800">Design Lab</span>
         <span className="hidden text-xs text-bamboo-600 sm:inline">
-          node-graph parametric modeling · drag to connect · edit params live
+          node-graph parametric modeling · drag to connect · shift-select + Ctrl/⌘ C/V to copy
         </span>
         <div className="ml-auto flex items-center gap-2">
           <select
