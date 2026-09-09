@@ -519,7 +519,7 @@ export function DesignEditor() {
       <div className="flex items-center gap-3 border-b border-bamboo-200 bg-bamboo-50 px-4 py-2">
         <span className="font-display text-lg font-semibold text-leaf-800">Design Lab</span>
         <span className="hidden text-xs text-bamboo-600 sm:inline">
-          node-graph parametric modeling · drag to connect · shift-select + Ctrl/⌘ C/V to copy
+          drag to connect · shift-select, Ctrl/⌘ C/V to copy, Del to remove
         </span>
         <div className="ml-auto flex items-center gap-2">
           <select
@@ -619,6 +619,10 @@ export function DesignEditor() {
             isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             fitView
+            // Delete / Backspace removes the selected nodes and edges (React Flow ignores
+            // the key while a param field is focused, so editing stays safe). Selecting an
+            // edge and pressing Delete is the only way to unwire two nodes.
+            deleteKeyCode={["Delete", "Backspace"]}
             proOptions={{ hideAttribution: true }}
           >
             <Background color="#d9cfb2" gap={18} />
