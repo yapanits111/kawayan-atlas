@@ -187,10 +187,34 @@ const freeformArch: ExampleGraph = {
   edges: [e("e1", "poly", "div"), e("e2", "div", "culm"), e("e3", "culm", "arr"), e("e4", "arr", "sch")],
 };
 
+// A double-layer arch: the same arc drives an outer culm and, offset inward, an inner one
+// — the two chords of a gridshell truss (offset primitive, §6a).
+const doubleArch: ExampleGraph = {
+  nodes: [
+    n("arc", "arc", 0, 20, { plane: "xy", radius: 3, start: 0, end: 180, samples: 24 }),
+    n("culmO", "culm", 250, 20, { d0: 90, d1: 75 }),
+    n("off", "offset", 250, 240, { dist: 0.5, plane: "xy" }),
+    n("culmI", "culm", 480, 240, { d0: 70, d1: 60 }),
+    n("bundle", "bundle", 700, 130),
+    n("arr", "arrayLinear", 900, 130, { count: 3, dx: 0, dy: 0, dz: 1.5 }),
+    n("sch", "schedule", 1120, 130),
+  ],
+  edges: [
+    e("e1", "arc", "culmO"),
+    e("e2", "arc", "off"),
+    e("e3", "off", "culmI"),
+    e("e4", "culmO", "bundle", "out", "a"),
+    e("e5", "culmI", "bundle", "out", "b"),
+    e("e6", "bundle", "arr"),
+    e("e7", "arr", "sch"),
+  ],
+};
+
 export const EXAMPLES: { key: string; label: string; graph: ExampleGraph }[] = [
   { key: "vault", label: "Barrel vault", graph: vault },
   { key: "freeform", label: "Freeform arch (curve)", graph: freeformArch },
   { key: "shell", label: "Lofted shell", graph: loftedShell },
+  { key: "double", label: "Double-layer arch (offset)", graph: doubleArch },
   { key: "postbeam", label: "Post & beam frame", graph: postBeam },
   { key: "woven", label: "Woven screen", graph: wovenScreen },
   { key: "ring", label: "Column ring", graph: columnRing },

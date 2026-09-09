@@ -299,6 +299,33 @@ describe("transforms", () => {
   });
 });
 
+describe("offsetCurve", () => {
+  it("offsets a straight line by the perpendicular in-plane normal", () => {
+    // line along +x, plane xy -> in-plane normal is -y; offset by 1 drops y by 1.
+    const c = G.offsetCurve(line2([0, 0, 0], [2, 0, 0]), 1, "xy");
+    expect(c.points[0]).toEqual([0, -1, 0]);
+    expect(c.points[1]).toEqual([2, -1, 0]);
+  });
+
+  it("preserves length for a straight offset", () => {
+    const c = G.offsetCurve(line2([0, 0, 0], [3, 0, 0]), 0.5, "xy");
+    expect(G.curveLength(c)).toBeCloseTo(3, 9);
+  });
+
+  it("leaves a point put when its tangent runs along the plane normal", () => {
+    // line along +z with plane xy (normal +z): no in-plane direction -> no offset.
+    const c = G.offsetCurve(line2([0, 0, 0], [0, 0, 2]), 1, "xy");
+    expect(c.points).toEqual([
+      [0, 0, 0],
+      [0, 0, 2],
+    ]);
+  });
+
+  it("returns a copy for fewer than 2 points", () => {
+    expect(G.offsetCurve({ points: [[1, 1, 1]] }, 1, "xy").points).toEqual([[1, 1, 1]]);
+  });
+});
+
 describe("loft / weave", () => {
   it("loftCurves returns `count` generators bridging the two rails", () => {
     const a = line2([0, 0, 0], [2, 0, 0]);

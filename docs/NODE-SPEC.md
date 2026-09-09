@@ -314,6 +314,18 @@ arc → divide → culm → array → schedule
 |---|---|---|---|
 | **tol** | tolerance (m) | `0.02` | min 0.001 |
 
+#### `offset` — Offset
+
+| | |
+|---|---|
+| **Inputs** | `in` curves *(curves)* |
+| **Outputs** | `out` curves *(curves)* |
+
+| Param | Label | Default | Range |
+|---|---|---|---|
+| **dist** | distance (m) | `0.4` | — |
+| **plane** | plane | `xy` | `xy` / `xz` / `yz` |
+
 
 ### Bamboo
 

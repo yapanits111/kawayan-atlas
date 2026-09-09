@@ -332,6 +332,18 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     params: [{ key: "tol", label: "tolerance (m)", default: 0.02, min: 0.001, step: 0.005 }],
     compute: (i, p) => ({ out: G.intersectCurves(curvesOf(i.a), curvesOf(i.b), num(p, "tol")) }),
   },
+  offset: {
+    type: "offset", label: "Offset", category: "Geometry",
+    inputs: [{ id: "in", label: "curves", kind: "curves" }],
+    outputs: [{ id: "out", label: "curves", kind: "curves" }],
+    params: [
+      { key: "dist", label: "distance (m)", default: 0.4, step: 0.05 },
+      { key: "plane", label: "plane", default: "xy", options: ["xy", "xz", "yz"] },
+    ],
+    compute: (i, p) => ({
+      out: asCurves(i.in).map((c) => G.offsetCurve(c, num(p, "dist"), p.plane as "xy" | "xz" | "yz")),
+    }),
+  },
   culm: {
     type: "culm", label: "Culm", category: "Bamboo",
     inputs: [{ id: "in", label: "curve/points", kind: "curves" }],

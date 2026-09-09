@@ -142,6 +142,26 @@ export function loftCurves(a: Curve, b: Curve, count: number): Curve[] {
   return out;
 }
 
+/** A parallel copy of a curve, offset a perpendicular distance within a plane — the inner
+ *  layer of a double-layer gridshell, or a run of cladding lines. Each point moves along
+ *  the in-plane normal to the local tangent (cross of tangent and the plane normal); where
+ *  the tangent runs along the plane normal there is no in-plane offset, so that point holds. */
+export function offsetCurve(curve: Curve, distance: number, plane: "xy" | "xz" | "yz"): Curve {
+  const pts = curve.points;
+  if (pts.length < 2) return { points: pts.slice() };
+  const nrm: Vec3 = plane === "xy" ? [0, 0, 1] : plane === "xz" ? [0, 1, 0] : [1, 0, 0];
+  const out: Vec3[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    const tan = normalize(sub(next, prev));
+    const dir = cross(tan, nrm);
+    const d = len(dir) < 1e-9 ? ([0, 0, 0] as Vec3) : normalize(dir);
+    out.push(add(pts[i], scale(d, distance)));
+  }
+  return { points: out };
+}
+
 /** A woven lattice: `u` warp lines crossing `v` weft lines over a w×h panel, the two
  *  layers offset by `gap` along the plane normal so strips visually interleave. */
 export function weaveLattice(

@@ -120,6 +120,22 @@ describe("evaluateGraph — bill of materials grouping", () => {
   });
 });
 
+describe("evaluateGraph — offset node", () => {
+  it("sweeps culms along an offset parallel curve", () => {
+    const nodes = [
+      node("arc", "arc", { plane: "xy", radius: 3, start: 0, end: 180, samples: 12 }),
+      node("off", "offset", { dist: 0.5, plane: "xy" }),
+      node("cu", "culm"),
+      node("sc", "schedule"),
+    ];
+    const edges = [edge("arc", "off"), edge("off", "cu"), edge("cu", "sc")];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.errors).toEqual({});
+    expect(r.schedule!.rows).toHaveLength(1);
+    expect(r.schedule!.rows[0].kind).toBe("culm");
+  });
+});
+
 describe("evaluateGraph — species material summary", () => {
   it("rolls culm length up by atlas species", () => {
     const nodes = [
