@@ -2,8 +2,17 @@
 
 import { VERIFICATION_LABEL, type Schedule } from "@/lib/design/types";
 
+/** Show the species breakdown only when at least one culm actually names a species. */
+const hasNamedSpecies = (s: Schedule) => s.species.some((g) => g.species !== "Unspecified");
+
 function toCSV(schedule: Schedule): string {
   const lines: string[] = [];
+  if (hasNamedSpecies(schedule)) {
+    lines.push("# Material by species");
+    lines.push(["species", "culms", "total_length_m"].join(","));
+    for (const g of schedule.species) lines.push([`"${g.species}"`, g.count, g.totalLength_m].join(","));
+    lines.push("");
+  }
   // Bill of materials first — the orderable summary.
   if (schedule.groups.length) {
     lines.push("# Bill of materials");
@@ -86,6 +95,11 @@ function scheduleHTML(schedule: Schedule): string {
     </style></head><body>
     <h1>🎋 Kawayan Atlas — Fabrication cut-list</h1>
     <div class="totals">${schedule.totals.count} elements · ${schedule.totals.totalLength_m} m total${schedule.totals.jointCount > 0 ? ` · ${schedule.totals.jointCount} joints` : ""}${schedule.totals.estCulms > 0 ? ` · ~${schedule.totals.estCulms} culms` : ""}</div>
+    ${hasNamedSpecies(schedule) ? `<h2>Material by species</h2>
+    <table><thead><tr><th>Species</th><th>Culms</th><th>Total length</th></tr></thead>
+    <tbody>${schedule.species
+      .map((g) => `<tr><td>${g.species}</td><td>${g.count}</td><td>${g.totalLength_m} m</td></tr>`)
+      .join("")}</tbody></table>` : ""}
     ${bom ? `<h2>Bill of materials</h2>
     <table><thead><tr><th>Qty</th><th>Kind</th><th>Length</th><th>Detail</th><th>Total</th></tr></thead>
     <tbody>${bom}</tbody></table>
@@ -173,6 +187,31 @@ export function SchedulePanel({ schedule }: { schedule: Schedule | null }) {
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
+            {hasNamedSpecies(schedule) && (
+              <>
+                <div className="border-b border-bamboo-200 bg-bamboo-50 px-3 py-1.5 text-xs font-semibold text-leaf-800">
+                  Material by species
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-bamboo-50 text-bamboo-500">
+                    <tr>
+                      <th className="px-3 py-1.5">Species</th>
+                      <th className="px-2 py-1.5">Culms</th>
+                      <th className="px-2 py-1.5">Total length</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schedule.species.map((g) => (
+                      <tr key={g.species} className="border-t border-bamboo-100">
+                        <td className="px-3 py-1 text-leaf-800">{g.species}</td>
+                        <td className="px-2 py-1 tabular-nums">{g.count}</td>
+                        <td className="px-2 py-1 tabular-nums text-bamboo-600">{g.totalLength_m} m</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
             {schedule.groups.length > 0 && (
               <>
                 <div className="border-b border-bamboo-200 bg-bamboo-50 px-3 py-1.5 text-xs font-semibold text-leaf-800">

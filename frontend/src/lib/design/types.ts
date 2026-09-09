@@ -27,6 +27,7 @@ export interface Element {
   curve: Curve;
   length: number; // arc length (m)
   verification?: Verification;
+  species?: string; // atlas species the culm is cut from (label), if chosen
   // culm
   startDiameter?: number; // mm
   endDiameter?: number; // mm
@@ -166,9 +167,18 @@ export interface ScheduleGroup {
   verification?: Verification;
 }
 
+/** Culm material rolled up by atlas species — poles are ordered per species, so a builder
+ *  wants "Bayog: 12 culms, 34 m" as well as the per-piece list (§5, §8). */
+export interface SpeciesSummary {
+  species: string; // atlas label, or "Unspecified"
+  count: number;
+  totalLength_m: number;
+}
+
 export interface Schedule {
   rows: ScheduleRow[];
   groups: ScheduleGroup[];
+  species: SpeciesSummary[];
   joints: JointRow[];
   totals: { count: number; totalLength_m: number; estCulms: number; jointCount: number };
 }

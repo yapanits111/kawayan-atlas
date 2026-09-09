@@ -1,5 +1,5 @@
 // Node registry — every node's inputs, outputs, params, and compute (whitepaper §7).
-import type { Vec3, Curve, Element, Joint, JointRow, PortKind, Schedule, ScheduleGroup, ScheduleRow, CheckFlag, CheckResult } from "./types";
+import type { Vec3, Curve, Element, Joint, JointRow, PortKind, Schedule, ScheduleGroup, ScheduleRow, SpeciesSummary, CheckFlag, CheckResult } from "./types";
 import * as G from "./geometry";
 import { parsePoles, reconcile } from "./inventory";
 
@@ -346,8 +346,13 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     compute: (i, p, ctx) => {
       const curves = asCurves(i.in);
       const spacing = num(p, "nodes");
+      // The atlas species (if chosen) rides along so the schedule can be ordered by pole
+      // type — the culm node is bamboo-aware (§3, §5).
+      const speciesId = String(p.species ?? "");
+      const species = speciesId ? String(p.speciesLabel ?? speciesId) : undefined;
       const out: Element[] = curves.map((c) => ({
         id: ctx.nextId("C"), kind: "culm", curve: c, length: G.curveLength(c),
+        species,
         startDiameter: num(p, "d0"), endDiameter: num(p, "d1"), wallThickness: num(p, "wall"),
         // Taper and node data ride along from the start, so the cut-list reflects real
         // material rather than an idealised cylinder (§8).
@@ -705,6 +710,18 @@ export const NODE_DEFS: Record<string, NodeDef> = {
         (a, b) => b.count - a.count || b.totalLength_m - a.totalLength_m,
       );
 
+      // Culm material rolled up by atlas species — poles are ordered per species (§5, §8).
+      const speciesMap = new Map<string, SpeciesSummary>();
+      for (const e of els) {
+        if (e.kind !== "culm") continue;
+        const key = e.species ?? "Unspecified";
+        const s = speciesMap.get(key) ?? { species: key, count: 0, totalLength_m: 0 };
+        s.count += 1;
+        s.totalLength_m = round(s.totalLength_m + e.length);
+        speciesMap.set(key, s);
+      }
+      const species = Array.from(speciesMap.values()).sort((a, b) => b.totalLength_m - a.totalLength_m);
+
       const totalLength = els.reduce((s, e) => s + e.length, 0);
       // Only round-culm elements are cut from whole poles; processed stock has its own
       // yield question, so counting it here would overstate the pole order.
@@ -712,6 +729,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       const schedule: Schedule = {
         rows,
         groups,
+        species,
         joints: jointRows,
         totals: {
           count: els.length,

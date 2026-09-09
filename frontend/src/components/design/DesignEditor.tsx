@@ -20,7 +20,8 @@ import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
 import { GraphNode } from "./GraphNode";
 import { Viewport3D } from "./Viewport3D";
 import { OutputPanel } from "./OutputPanel";
-import { NODE_DEFS, CATEGORIES } from "@/lib/design/nodeDefs";
+import { AddNodeMenu } from "./AddNodeMenu";
+import { NODE_DEFS } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
 import { EXAMPLES } from "@/lib/design/examples";
 import { api } from "@/lib/api";
@@ -91,6 +92,7 @@ export function DesignEditor() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const speciesInfo = useRef<Record<string, { d0: number; d1: number; wall: number }>>({});
+  const speciesLabels = useRef<Record<string, string>>({});
   const [speciesOptions, setSpeciesOptions] = useState<{ value: string; label: string }[]>([]);
   const jointLabels = useRef<Record<string, string>>({});
   const [jointOptions, setJointOptions] = useState<{ value: string; label: string }[]>([]);
@@ -101,6 +103,7 @@ export function DesignEditor() {
       .listSpecies()
       .then((all) => {
         const info: Record<string, { d0: number; d1: number; wall: number }> = {};
+        const labels: Record<string, string> = {};
         const opts: { value: string; label: string }[] = [];
         const firstInt = (s: string) => {
           const m = s.match(/\d+/);
@@ -109,9 +112,11 @@ export function DesignEditor() {
         for (const s of all) {
           const d0 = firstInt(s.culm_diam_range) || 90;
           info[s.id] = { d0, d1: Math.round(d0 * 0.87), wall: firstInt(s.wall_thickness_range) || 10 };
+          labels[s.id] = s.name_local;
           opts.push({ value: s.id, label: s.name_local });
         }
         speciesInfo.current = info;
+        speciesLabels.current = labels;
         setSpeciesOptions(opts);
       })
       .catch(() => {});
@@ -188,12 +193,16 @@ export function DesignEditor() {
         ns.map((n) => {
           if (n.id !== nodeId) return n;
           const params = { ...(n.data as { params: Record<string, number | string> }).params, [key]: value };
-          // Picking a species fills the culm's diameter/wall from the atlas data.
-          if (key === "species" && typeof value === "string" && speciesInfo.current[value]) {
+          // Picking a species fills the culm's diameter/wall from the atlas data, and
+          // carries the species label through to the schedule's material summary.
+          if (key === "species" && typeof value === "string") {
+            params.speciesLabel = speciesLabels.current[value] ?? "";
             const info = speciesInfo.current[value];
-            params.d0 = info.d0;
-            params.d1 = info.d1;
-            params.wall = info.wall;
+            if (info) {
+              params.d0 = info.d0;
+              params.d1 = info.d1;
+              params.wall = info.wall;
+            }
           }
           // Picking a joint type carries its library label through to the joint schedule.
           if (key === "type" && typeof value === "string") {
@@ -437,25 +446,7 @@ export function DesignEditor() {
               <option key={x.key} value={x.key}>{x.label}</option>
             ))}
           </select>
-          <select
-            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) addNode(e.target.value);
-              e.target.value = "";
-            }}
-          >
-            <option value="">+ Add node…</option>
-            {CATEGORIES.map((cat) => (
-              <optgroup key={cat} label={cat}>
-                {Object.values(NODE_DEFS)
-                  .filter((d) => d.category === cat)
-                  .map((d) => (
-                    <option key={d.type} value={d.type}>{d.label}</option>
-                  ))}
-              </optgroup>
-            ))}
-          </select>
+          <AddNodeMenu onAdd={addNode} />
           <button
             onClick={saveAndShare}
             disabled={saving}

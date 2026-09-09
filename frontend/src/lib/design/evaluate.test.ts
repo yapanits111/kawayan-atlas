@@ -120,6 +120,33 @@ describe("evaluateGraph — bill of materials grouping", () => {
   });
 });
 
+describe("evaluateGraph — species material summary", () => {
+  it("rolls culm length up by atlas species", () => {
+    const nodes = [
+      node("ln", "line", { ax: 0, ay: 0, az: 0, bx: 4, by: 0, bz: 0 }),
+      node("cu", "culm", { species: "bayog", speciesLabel: "Bayog" }),
+      node("ar", "arrayLinear", { count: 3, dx: 0, dy: 0, dz: 1 }),
+      node("sc", "schedule"),
+    ];
+    const edges = [edge("ln", "cu"), edge("cu", "ar"), edge("ar", "sc")];
+    const r = evaluateGraph(nodes, edges);
+    expect(r.schedule!.species).toHaveLength(1);
+    expect(r.schedule!.species[0].species).toBe("Bayog");
+    expect(r.schedule!.species[0].count).toBe(3);
+    expect(r.schedule!.species[0].totalLength_m).toBeCloseTo(12, 6);
+  });
+
+  it("labels culms with no species chosen as Unspecified", () => {
+    const nodes = [
+      node("ln", "line", { ax: 0, ay: 0, az: 0, bx: 3, by: 0, bz: 0 }),
+      node("cu", "culm"),
+      node("sc", "schedule"),
+    ];
+    const r = evaluateGraph(nodes, [edge("ln", "cu"), edge("cu", "sc")]);
+    expect(r.schedule!.species[0].species).toBe("Unspecified");
+  });
+});
+
 describe("evaluateGraph — dependency ordering", () => {
   it("evaluates producers before consumers regardless of array order", () => {
     // Deliberately scrambled: consumer listed before its producers.
