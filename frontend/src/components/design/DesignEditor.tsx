@@ -18,6 +18,7 @@ import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
 import { GraphNode } from "./GraphNode";
+import { NoteNode } from "./NoteNode";
 import { Viewport3D } from "./Viewport3D";
 import { OutputPanel } from "./OutputPanel";
 import { AddNodeMenu } from "./AddNodeMenu";
@@ -31,12 +32,19 @@ const STORAGE_KEY = "kawayan-design-graph";
 /** Strip React Flow's runtime fields down to the essentials we persist. */
 function serialize(nodes: Node[], edges: Edge[]) {
   return {
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      type: "graphNode",
-      position: n.position,
-      data: { type: (n.data as { type: string }).type, params: (n.data as { params: unknown }).params },
-    })),
+    nodes: nodes.map((n) => {
+      const base = { id: n.id, type: n.type ?? "graphNode", position: n.position };
+      if (n.type === "note") {
+        // Notes carry their own text and box size, not a node type/params.
+        return {
+          ...base,
+          width: n.width ?? n.measured?.width,
+          height: n.height ?? n.measured?.height,
+          data: { text: (n.data as { text?: string }).text ?? "" },
+        };
+      }
+      return { ...base, data: { type: (n.data as { type: string }).type, params: (n.data as { params: unknown }).params } };
+    }),
     edges: edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -47,7 +55,7 @@ function serialize(nodes: Node[], edges: Edge[]) {
   };
 }
 
-const nodeTypes = { graphNode: GraphNode };
+const nodeTypes = { graphNode: GraphNode, note: NoteNode };
 
 function defaultParams(type: string): Record<string, number | string> {
   return Object.fromEntries(NODE_DEFS[type].params.map((p) => [p.key, p.default]));
@@ -249,7 +257,8 @@ export function DesignEditor() {
   // Copy the current selection (nodes + the edges wholly inside it) to an in-memory
   // clipboard, so a subgraph can be replicated as a unit.
   const copySelection = useCallback(() => {
-    const sel = nodes.filter((n) => n.selected);
+    // Notes are annotations, not part of the computational subgraph — don't copy them.
+    const sel = nodes.filter((n) => n.selected && n.type !== "note");
     if (!sel.length) return;
     const ids = new Set(sel.map((n) => n.id));
     clipboard.current = {
@@ -290,10 +299,22 @@ export function DesignEditor() {
     setEdges((es) => [...es, ...newEdges]);
   }, [setNodes, setEdges]);
 
-  // Inject the param-updater into every node's data so custom nodes can edit params.
+  const updateNote = useCallback(
+    (nodeId: string, text: string) => {
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, text } } : n)));
+    },
+    [setNodes],
+  );
+
+  // Inject the right handlers per node kind, and keep notes stacked below the graph nodes.
   const rfNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions } })),
-    [nodes, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions],
+    () =>
+      nodes.map((n) =>
+        n.type === "note"
+          ? { ...n, zIndex: 0, data: { ...n.data, updateNote, deleteNode } }
+          : { ...n, zIndex: 1, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions } },
+      ),
+    [nodes, updateParam, updateNote, deleteNode, duplicateNode, speciesOptions, jointOptions],
   );
 
   const onConnect = useCallback(
@@ -314,6 +335,22 @@ export function DesignEditor() {
     },
     [nodes],
   );
+
+  function addNote() {
+    const id = `note-${idCounter.current++}`;
+    setNodes((ns) => [
+      ...ns,
+      {
+        id,
+        type: "note",
+        position: { x: 80 + Math.random() * 80, y: 220 + Math.random() * 80 },
+        width: 240,
+        height: 150,
+        zIndex: 0,
+        data: { text: "" },
+      },
+    ]);
+  }
 
   function addNode(type: string) {
     const id = `${type}-${idCounter.current++}`;
@@ -417,11 +454,13 @@ export function DesignEditor() {
 
   // Live evaluation (dependency-ordered) — recomputes on any node/edge change.
   const result = useMemo(() => {
-    const evalNodes = nodes.map((n) => ({
-      id: n.id,
-      type: (n.data as { type: string }).type,
-      data: { params: (n.data as { params: Record<string, number | string> }).params },
-    }));
+    const evalNodes = nodes
+      .filter((n) => n.type !== "note") // annotations are not evaluated
+      .map((n) => ({
+        id: n.id,
+        type: (n.data as { type: string }).type,
+        data: { params: (n.data as { params: Record<string, number | string> }).params },
+      }));
     return evaluateGraph(evalNodes, edges);
   }, [nodes, edges]);
 
@@ -497,6 +536,13 @@ export function DesignEditor() {
             ))}
           </select>
           <AddNodeMenu onAdd={addNode} />
+          <button
+            onClick={addNote}
+            title="Add a note to annotate the graph"
+            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm text-bamboo-800 hover:bg-bamboo-100"
+          >
+            + Note
+          </button>
           <button
             onClick={saveAndShare}
             disabled={saving}
