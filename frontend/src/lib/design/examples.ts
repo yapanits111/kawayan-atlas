@@ -38,7 +38,7 @@ const postBeam: ExampleGraph = {
     n("trans", "transform", 220, 240, { ty: 2.5 }),
     n("culmB", "culm", 440, 240, { d0: 100, d1: 100 }),
     n("bundle", "bundle", 660, 130),
-    n("joint", "joint", 860, 130, { tol: 0.2 }),
+    n("joint", "joint", 860, 130, { tol: 0.2 }), // auto-typed: posts meeting the beam saddle, the ridge splices bolt
     n("sch", "schedule", 1060, 130),
   ],
   edges: [
@@ -50,6 +50,7 @@ const postBeam: ExampleGraph = {
     e("e6", "culmB", "bundle", "out", "b"),
     e("e7", "bundle", "joint"),
     e("e8", "joint", "sch"),
+    e("e9", "joint", "sch", "joints", "joints"),
   ],
 };
 
@@ -109,11 +110,117 @@ const loftedShell: ExampleGraph = {
   ],
 };
 
+// Diaphragms carried into the cut-list: posts split at their nodes, each internode
+// keeping its own share of the taper (§8).
+const internodePosts: ExampleGraph = {
+  nodes: [
+    n("grid", "grid", 0, 40, { cols: 3, rows: 1, sx: 1.2, sy: 1 }),
+    n("ext", "extrude", 220, 40, { height: 3, axis: "y" }),
+    n("culm", "culm", 440, 40, { d0: 100, d1: 82, nodes: 0.32 }),
+    n("inter", "internode", 660, 40, { spacing: 0.32, mode: "split" }),
+    n("sch", "schedule", 900, 40),
+  ],
+  edges: [e("e1", "grid", "ext"), e("e2", "ext", "culm"), e("e3", "culm", "inter"), e("e4", "inter", "sch")],
+};
+
+// Phase 3: a glue-laminated bent arch — modellable, but outside ISO 22156 (§9), so the
+// schedule labels it rather than implying a code check.
+const laminatedArch: ExampleGraph = {
+  nodes: [
+    n("arc", "arc", 0, 40, { plane: "xy", radius: 3.2, start: 20, end: 160, samples: 32 }),
+    n("lam", "laminate", 250, 40, { w: 80, ply: 6, layers: 6, layup: "parallel" }),
+    n("arr", "arrayLinear", 500, 40, { count: 4, dx: 0, dy: 0, dz: 1.2 }),
+    n("sch", "schedule", 740, 40),
+  ],
+  edges: [e("e1", "arc", "lam"), e("e2", "lam", "arr"), e("e3", "arr", "sch")],
+};
+
+// Two crossing sets of culms; `intersect` marks every crossing — the lashing points.
+const lashedScreen: ExampleGraph = {
+  nodes: [
+    n("lineV", "line", 0, 20, { ax: 0, ay: 0, az: 0, bx: 0, by: 2.4, bz: 0 }),
+    n("arrV", "arrayLinear", 220, 20, { count: 6, dx: 0.6, dy: 0, dz: 0 }),
+    n("culmV", "culm", 440, 20, { d0: 70, d1: 62, nodes: 0.35 }),
+    n("lineH", "line", 0, 300, { ax: 0, ay: 0, az: 0, bx: 3, by: 0, bz: 0 }),
+    n("arrH", "arrayLinear", 220, 300, { count: 5, dx: 0, dy: 0.6, dz: 0 }),
+    n("culmH", "culm", 440, 300, { d0: 70, d1: 62, nodes: 0.35 }),
+    n("cross", "intersect", 660, 440, { tol: 0.03 }),
+    n("bundle", "bundle", 660, 160),
+    n("sch", "schedule", 880, 160),
+  ],
+  edges: [
+    e("e1", "lineV", "arrV"),
+    e("e2", "arrV", "culmV"),
+    e("e3", "lineH", "arrH"),
+    e("e4", "arrH", "culmH"),
+    e("e5", "culmV", "bundle", "out", "a"),
+    e("e6", "culmH", "bundle", "out", "b"),
+    e("e7", "bundle", "sch"),
+    e("e8", "arrV", "cross", "out", "a"),
+    e("e9", "arrH", "cross", "out", "b"),
+  ],
+};
+
+// Phase 4: the same posts reconciled against a yard of real, measured poles — which
+// pole each piece is cut from, and what is left over.
+const yardCheck: ExampleGraph = {
+  nodes: [
+    n("grid", "grid", 0, 40, { cols: 4, rows: 2, sx: 2, sy: 2.5 }),
+    n("ext", "extrude", 230, 40, { height: 2.8, axis: "y" }),
+    n("culm", "culm", 460, 40, { d0: 95, d1: 80, nodes: 0.3 }),
+    n("inv", "inventory", 690, 40),
+    n("sch", "schedule", 930, 40),
+  ],
+  edges: [e("e1", "grid", "ext"), e("e2", "ext", "culm"), e("e3", "culm", "inv"), e("e4", "inv", "sch")],
+};
+
+// A freeform curve drawn by hand, smoothed into an arch, then culm-swept — the whitepaper's
+// "forms that have no name" (§4) reached through the Layer-1 `curve` primitive.
+const freeformArch: ExampleGraph = {
+  nodes: [
+    n("poly", "polyline", 0, 40, { closed: "no", smooth: 14 }),
+    n("div", "divide", 250, 40, { count: 12 }),
+    n("culm", "culm", 490, 40, { d0: 90, d1: 72, nodes: 0.3 }),
+    n("arr", "arrayLinear", 730, 40, { count: 3, dx: 0, dy: 0, dz: 1.4 }),
+    n("sch", "schedule", 970, 40),
+  ],
+  edges: [e("e1", "poly", "div"), e("e2", "div", "culm"), e("e3", "culm", "arr"), e("e4", "arr", "sch")],
+};
+
+// A double-layer arch: the same arc drives an outer culm and, offset inward, an inner one
+// — the two chords of a gridshell truss (offset primitive, §6a).
+const doubleArch: ExampleGraph = {
+  nodes: [
+    n("arc", "arc", 0, 20, { plane: "xy", radius: 3, start: 0, end: 180, samples: 24 }),
+    n("culmO", "culm", 250, 20, { d0: 90, d1: 75 }),
+    n("off", "offset", 250, 240, { dist: 0.5, plane: "xy" }),
+    n("culmI", "culm", 480, 240, { d0: 70, d1: 60 }),
+    n("bundle", "bundle", 700, 130),
+    n("arr", "arrayLinear", 900, 130, { count: 3, dx: 0, dy: 0, dz: 1.5 }),
+    n("sch", "schedule", 1120, 130),
+  ],
+  edges: [
+    e("e1", "arc", "culmO"),
+    e("e2", "arc", "off"),
+    e("e3", "off", "culmI"),
+    e("e4", "culmO", "bundle", "out", "a"),
+    e("e5", "culmI", "bundle", "out", "b"),
+    e("e6", "bundle", "arr"),
+    e("e7", "arr", "sch"),
+  ],
+};
+
 export const EXAMPLES: { key: string; label: string; graph: ExampleGraph }[] = [
   { key: "vault", label: "Barrel vault", graph: vault },
+  { key: "freeform", label: "Freeform arch (curve)", graph: freeformArch },
   { key: "shell", label: "Lofted shell", graph: loftedShell },
+  { key: "double", label: "Double-layer arch (offset)", graph: doubleArch },
   { key: "postbeam", label: "Post & beam frame", graph: postBeam },
   { key: "woven", label: "Woven screen", graph: wovenScreen },
   { key: "ring", label: "Column ring", graph: columnRing },
   { key: "checked", label: "Checked posts (advisory)", graph: checkedPosts },
+  { key: "internode", label: "Nodes & internodes", graph: internodePosts },
+  { key: "laminate", label: "Laminated arch (engineered)", graph: laminatedArch },
+  { key: "lashed", label: "Lashed screen (intersect)", graph: lashedScreen },
+  { key: "yard", label: "Reconcile against a pole yard", graph: yardCheck },
 ];

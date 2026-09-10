@@ -18,9 +18,11 @@ import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
 import { GraphNode } from "./GraphNode";
+import { NoteNode } from "./NoteNode";
 import { Viewport3D } from "./Viewport3D";
 import { OutputPanel } from "./OutputPanel";
-import { NODE_DEFS, CATEGORIES } from "@/lib/design/nodeDefs";
+import { AddNodeMenu } from "./AddNodeMenu";
+import { NODE_DEFS } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
 import { EXAMPLES } from "@/lib/design/examples";
 import { api } from "@/lib/api";
@@ -30,12 +32,19 @@ const STORAGE_KEY = "kawayan-design-graph";
 /** Strip React Flow's runtime fields down to the essentials we persist. */
 function serialize(nodes: Node[], edges: Edge[]) {
   return {
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      type: "graphNode",
-      position: n.position,
-      data: { type: (n.data as { type: string }).type, params: (n.data as { params: unknown }).params },
-    })),
+    nodes: nodes.map((n) => {
+      const base = { id: n.id, type: n.type ?? "graphNode", position: n.position };
+      if (n.type === "note") {
+        // Notes carry their own text and box size, not a node type/params.
+        return {
+          ...base,
+          width: n.width ?? n.measured?.width,
+          height: n.height ?? n.measured?.height,
+          data: { text: (n.data as { text?: string }).text ?? "" },
+        };
+      }
+      return { ...base, data: { type: (n.data as { type: string }).type, params: (n.data as { params: unknown }).params } };
+    }),
     edges: edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -46,7 +55,7 @@ function serialize(nodes: Node[], edges: Edge[]) {
   };
 }
 
-const nodeTypes = { graphNode: GraphNode };
+const nodeTypes = { graphNode: GraphNode, note: NoteNode };
 
 function defaultParams(type: string): Record<string, number | string> {
   return Object.fromEntries(NODE_DEFS[type].params.map((p) => [p.key, p.default]));
@@ -84,6 +93,7 @@ export function DesignEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const idCounter = useRef(100);
+  const clipboard = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const restored = useRef(false);
@@ -91,7 +101,10 @@ export function DesignEditor() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const speciesInfo = useRef<Record<string, { d0: number; d1: number; wall: number }>>({});
+  const speciesLabels = useRef<Record<string, string>>({});
   const [speciesOptions, setSpeciesOptions] = useState<{ value: string; label: string }[]>([]);
+  const jointLabels = useRef<Record<string, string>>({});
+  const [jointOptions, setJointOptions] = useState<{ value: string; label: string }[]>([]);
 
   // Pull the seeded atlas species so culm nodes can be bamboo-aware (auto-fill dims).
   useEffect(() => {
@@ -99,6 +112,7 @@ export function DesignEditor() {
       .listSpecies()
       .then((all) => {
         const info: Record<string, { d0: number; d1: number; wall: number }> = {};
+        const labels: Record<string, string> = {};
         const opts: { value: string; label: string }[] = [];
         const firstInt = (s: string) => {
           const m = s.match(/\d+/);
@@ -107,10 +121,23 @@ export function DesignEditor() {
         for (const s of all) {
           const d0 = firstInt(s.culm_diam_range) || 90;
           info[s.id] = { d0, d1: Math.round(d0 * 0.87), wall: firstInt(s.wall_thickness_range) || 10 };
+          labels[s.id] = s.name_local;
           opts.push({ value: s.id, label: s.name_local });
         }
         speciesInfo.current = info;
+        speciesLabels.current = labels;
         setSpeciesOptions(opts);
+      })
+      .catch(() => {});
+
+    // The joint library, so a `joint` node knows a fish-mouth from a bolt-through (§3).
+    api
+      .listJoints()
+      .then((all) => {
+        const labels: Record<string, string> = {};
+        for (const j of all) labels[j.id] = j.name;
+        jointLabels.current = labels;
+        setJointOptions(all.map((j) => ({ value: j.id, label: j.name })));
       })
       .catch(() => {});
   }, []);
@@ -175,12 +202,20 @@ export function DesignEditor() {
         ns.map((n) => {
           if (n.id !== nodeId) return n;
           const params = { ...(n.data as { params: Record<string, number | string> }).params, [key]: value };
-          // Picking a species fills the culm's diameter/wall from the atlas data.
-          if (key === "species" && typeof value === "string" && speciesInfo.current[value]) {
+          // Picking a species fills the culm's diameter/wall from the atlas data, and
+          // carries the species label through to the schedule's material summary.
+          if (key === "species" && typeof value === "string") {
+            params.speciesLabel = speciesLabels.current[value] ?? "";
             const info = speciesInfo.current[value];
-            params.d0 = info.d0;
-            params.d1 = info.d1;
-            params.wall = info.wall;
+            if (info) {
+              params.d0 = info.d0;
+              params.d1 = info.d1;
+              params.wall = info.wall;
+            }
+          }
+          // Picking a joint type carries its library label through to the joint schedule.
+          if (key === "type" && typeof value === "string") {
+            params.typeLabel = jointLabels.current[value] ?? value;
           }
           return { ...n, data: { ...n.data, params } };
         }),
@@ -219,10 +254,67 @@ export function DesignEditor() {
     [setNodes],
   );
 
-  // Inject the param-updater into every node's data so custom nodes can edit params.
+  // Copy the current selection (nodes + the edges wholly inside it) to an in-memory
+  // clipboard, so a subgraph can be replicated as a unit.
+  const copySelection = useCallback(() => {
+    // Notes are annotations, not part of the computational subgraph — don't copy them.
+    const sel = nodes.filter((n) => n.selected && n.type !== "note");
+    if (!sel.length) return;
+    const ids = new Set(sel.map((n) => n.id));
+    clipboard.current = {
+      nodes: sel.map((n) => ({
+        ...n,
+        data: { type: (n.data as { type: string }).type, params: { ...(n.data as { params: object }).params } },
+      })) as Node[],
+      edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({ ...e })),
+    };
+  }, [nodes, edges]);
+
+  // Paste the clipboard: fresh ids, an offset, internal edges rewired to the new ids, and
+  // the copies left selected so the next paste steps further along (and they move as a group).
+  const pasteClipboard = useCallback(() => {
+    const clip = clipboard.current;
+    if (!clip || clip.nodes.length === 0) return;
+    const OFFSET = 48;
+    const idMap = new Map<string, string>();
+    const newNodes: Node[] = clip.nodes.map((n) => {
+      const type = (n.data as { type: string }).type;
+      const id = `${type}-${idCounter.current++}`;
+      idMap.set(n.id, id);
+      return {
+        id,
+        type: "graphNode",
+        position: { x: n.position.x + OFFSET, y: n.position.y + OFFSET },
+        selected: true,
+        data: { type, params: { ...(n.data as { params: object }).params } },
+      } as Node;
+    });
+    const newEdges: Edge[] = clip.edges.map((e) => ({
+      ...e,
+      id: `e-${idCounter.current++}`,
+      source: idMap.get(e.source)!,
+      target: idMap.get(e.target)!,
+    }));
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...newNodes]);
+    setEdges((es) => [...es, ...newEdges]);
+  }, [setNodes, setEdges]);
+
+  const updateNote = useCallback(
+    (nodeId: string, text: string) => {
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, text } } : n)));
+    },
+    [setNodes],
+  );
+
+  // Inject the right handlers per node kind, and keep notes stacked below the graph nodes.
   const rfNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions } })),
-    [nodes, updateParam, deleteNode, duplicateNode, speciesOptions],
+    () =>
+      nodes.map((n) =>
+        n.type === "note"
+          ? { ...n, zIndex: 0, data: { ...n.data, updateNote, deleteNode } }
+          : { ...n, zIndex: 1, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions } },
+      ),
+    [nodes, updateParam, updateNote, deleteNode, duplicateNode, speciesOptions, jointOptions],
   );
 
   const onConnect = useCallback(
@@ -243,6 +335,22 @@ export function DesignEditor() {
     },
     [nodes],
   );
+
+  function addNote() {
+    const id = `note-${idCounter.current++}`;
+    setNodes((ns) => [
+      ...ns,
+      {
+        id,
+        type: "note",
+        position: { x: 80 + Math.random() * 80, y: 220 + Math.random() * 80 },
+        width: 240,
+        height: 150,
+        zIndex: 0,
+        data: { text: "" },
+      },
+    ]);
+  }
 
   function addNode(type: string) {
     const id = `${type}-${idCounter.current++}`;
@@ -319,7 +427,8 @@ export function DesignEditor() {
     setCanRedo(h.index < h.stack.length - 1);
   }, [applySnap]);
 
-  // Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo (not while typing).
+  // Keyboard: Ctrl/Cmd+Z undo, +Shift+Z / +Y redo, +C copy selection, +V paste
+  // (all suppressed while typing in a field, so native copy/paste still works there).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -333,19 +442,25 @@ export function DesignEditor() {
       } else if ((key === "z" && e.shiftKey) || key === "y") {
         e.preventDefault();
         redo();
+      } else if (key === "c") {
+        copySelection();
+      } else if (key === "v") {
+        pasteClipboard();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  }, [undo, redo, copySelection, pasteClipboard]);
 
   // Live evaluation (dependency-ordered) — recomputes on any node/edge change.
   const result = useMemo(() => {
-    const evalNodes = nodes.map((n) => ({
-      id: n.id,
-      type: (n.data as { type: string }).type,
-      data: { params: (n.data as { params: Record<string, number | string> }).params },
-    }));
+    const evalNodes = nodes
+      .filter((n) => n.type !== "note") // annotations are not evaluated
+      .map((n) => ({
+        id: n.id,
+        type: (n.data as { type: string }).type,
+        data: { params: (n.data as { params: Record<string, number | string> }).params },
+      }));
     return evaluateGraph(evalNodes, edges);
   }, [nodes, edges]);
 
@@ -356,7 +471,9 @@ export function DesignEditor() {
         el.kind === "culm"
           ? tubeGeometry(el.curve, (el.startDiameter ?? 80) / 2000, (el.endDiameter ?? 70) / 2000, 10)
           : stripGeometry(el.curve, (el.width ?? 25) / 1000, (el.thickness ?? 6) / 1000);
-      const mat = new THREE.MeshStandardMaterial({ color: el.kind === "culm" ? 0x9a8248 : 0xc2b184 });
+      const mat = new THREE.MeshStandardMaterial({
+        color: el.kind === "culm" ? 0x9a8248 : el.kind === "laminate" ? 0x8c6f3f : 0xc2b184,
+      });
       group.add(new THREE.Mesh(geo, mat));
     }
     if (group.children.length === 0) return;
@@ -373,7 +490,7 @@ export function DesignEditor() {
     // Z-up, so map (x, y, z) -> (x, z, y).
     const out: string[] = ["0", "SECTION", "2", "ENTITIES"];
     for (const el of result.scene.elements) {
-      const layer = el.kind === "culm" ? "CULM" : "STRIP";
+      const layer = el.kind === "culm" ? "CULM" : el.kind === "laminate" ? "LAMINATE" : "STRIP";
       const p = el.curve.points;
       for (let i = 0; i < p.length - 1; i++) {
         const a = p[i], b = p[i + 1];
@@ -402,7 +519,7 @@ export function DesignEditor() {
       <div className="flex items-center gap-3 border-b border-bamboo-200 bg-bamboo-50 px-4 py-2">
         <span className="font-display text-lg font-semibold text-leaf-800">Design Lab</span>
         <span className="hidden text-xs text-bamboo-600 sm:inline">
-          node-graph parametric modeling · drag to connect · edit params live
+          drag to connect · shift-select, Ctrl/⌘ C/V to copy, Del to remove
         </span>
         <div className="ml-auto flex items-center gap-2">
           <select
@@ -418,25 +535,14 @@ export function DesignEditor() {
               <option key={x.key} value={x.key}>{x.label}</option>
             ))}
           </select>
-          <select
-            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) addNode(e.target.value);
-              e.target.value = "";
-            }}
+          <AddNodeMenu onAdd={addNode} />
+          <button
+            onClick={addNote}
+            title="Add a note to annotate the graph"
+            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm text-bamboo-800 hover:bg-bamboo-100"
           >
-            <option value="">+ Add node…</option>
-            {CATEGORIES.map((cat) => (
-              <optgroup key={cat} label={cat}>
-                {Object.values(NODE_DEFS)
-                  .filter((d) => d.category === cat)
-                  .map((d) => (
-                    <option key={d.type} value={d.type}>{d.label}</option>
-                  ))}
-              </optgroup>
-            ))}
-          </select>
+            + Note
+          </button>
           <button
             onClick={saveAndShare}
             disabled={saving}
@@ -513,6 +619,10 @@ export function DesignEditor() {
             isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             fitView
+            // Delete / Backspace removes the selected nodes and edges (React Flow ignores
+            // the key while a param field is focused, so editing stays safe). Selecting an
+            // edge and pressing Delete is the only way to unwire two nodes.
+            deleteKeyCode={["Delete", "Backspace"]}
             proOptions={{ hideAttribution: true }}
           >
             <Background color="#d9cfb2" gap={18} />
@@ -531,7 +641,7 @@ export function DesignEditor() {
             />
           </div>
           <div className="min-h-0 border-t border-bamboo-200 bg-white">
-            <OutputPanel schedule={result.schedule} checks={result.checks} />
+            <OutputPanel schedule={result.schedule} checks={result.checks} inventory={result.inventory} />
           </div>
         </div>
       </div>

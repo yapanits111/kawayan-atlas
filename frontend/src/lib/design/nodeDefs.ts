@@ -1,6 +1,7 @@
 // Node registry — every node's inputs, outputs, params, and compute (whitepaper §7).
-import type { Vec3, Curve, Element, Joint, PortKind, Schedule, ScheduleRow, CheckFlag, CheckResult } from "./types";
+import type { Vec3, Curve, Element, Joint, JointRow, PortKind, Schedule, ScheduleGroup, ScheduleRow, SpeciesSummary, CheckFlag, CheckResult } from "./types";
 import * as G from "./geometry";
+import { parsePoles, reconcile } from "./inventory";
 
 export interface ParamDef {
   key: string;
@@ -10,13 +11,23 @@ export interface ParamDef {
   max?: number;
   step?: number;
   options?: string[]; // present => static select
-  dynamic?: "species"; // present => select populated at runtime (e.g. from the atlas)
+  multiline?: boolean; // present => free-text area (e.g. a pasted pole list)
+  dynamic?: "species" | "joints"; // present => select populated at runtime from the API
 }
 export interface PortDef {
   id: string;
   label: string;
   kind: PortKind;
 }
+/** Per-evaluation context handed to every node's compute. */
+export interface NodeCtx {
+  nodeId: string;
+  /** Allocates a piece mark unique across the whole graph (C1, C2, … ). Two culm nodes
+   *  must not both number from C1 — colliding marks are dropped downstream and pieces
+   *  vanish from the cut-list. */
+  nextId: (prefix: string) => string;
+}
+
 export interface NodeDef {
   type: string;
   label: string;
@@ -24,7 +35,11 @@ export interface NodeDef {
   inputs: PortDef[];
   outputs: PortDef[];
   params: ParamDef[];
-  compute: (inputs: Record<string, unknown>, p: Record<string, number | string>) => Record<string, unknown>;
+  compute: (
+    inputs: Record<string, unknown>,
+    p: Record<string, number | string>,
+    ctx: NodeCtx,
+  ) => Record<string, unknown>;
 }
 
 // --- coercion helpers ---
@@ -51,10 +66,76 @@ function asElements(v: unknown): Element[] {
   if (Array.isArray(v) && v.length && (v[0] as Element)?.kind) return v as Element[];
   return [];
 }
+function curvesOf(v: unknown): Curve[] {
+  const els = asElements(v);
+  if (els.length) return els.map((e) => e.curve);
+  return asCurves(v);
+}
 const num = (p: Record<string, number | string>, k: string) => Number(p[k]);
+
+/** The seeded joint library (backend/app/seed_data/joints.json), with the one property the
+ *  geometry cares about: `mitred` — whether the connection saddle-cuts the member to the
+ *  mating angle (only the fish-mouth does). Every other type butts square and is held by a
+ *  tie, dowel, bolt, mortar plug or strap (whitepaper §3). */
+const JOINT_LIBRARY: Record<string, { label: string; mitred: boolean }> = {
+  "fish-mouth": { label: "Fish-Mouth (Saddle) Joint", mitred: true },
+  bolted: { label: "Bolted Joint", mitred: false },
+  "bolted-mortar-plug": { label: "Bolted + Mortar-Plug Joint", mitred: false },
+  "lashing-tie": { label: "Traditional Lashing (Rattan / Palm-fiber Tie)", mitred: false },
+  "pin-dowel": { label: "Pin / Dowel Joint", mitred: false },
+  "steel-strap-gusset": { label: "Steel-Strap / Gusset Joint", mitred: false },
+};
+
+/** Advisory geometric typing of a joint — the whitepaper's claim that a `joint` node
+ *  "already knows a fish-mouth cut from a bolt-through connection" (§3). Decided purely
+ *  from how many members meet and the angle between them:
+ *   - 3+ members         → a hub carrying load every way: bolted + mortar-plug node.
+ *   - 2 members, ~inline → an end-to-end continuation (angle ≥ spliceDeg): a bolted splice.
+ *   - 2 members, angled  → the incoming culm is fish-mouth (saddle) cut to seat on the other.
+ *  A starting point for detailing, never a connection design — the schedule says as much. */
+function classifyJoint(members: number, angle: number | undefined, spliceDeg: number): string {
+  if (members >= 3) return "bolted-mortar-plug";
+  if (angle === undefined) return "bolted"; // parallel/indeterminate → safe positive fixing
+  if (angle >= spliceDeg) return "bolted"; // near-collinear splice
+  return "fish-mouth"; // members meet at an angle → saddle
+}
+
+/** A small worked yard so the node reconciles something the moment it is dropped in.
+ *  Format per line: id, length_m, Ø base_mm, Ø tip_mm. */
+const DEFAULT_POLES = [
+  "# id, length_m, base_mm, tip_mm",
+  "P1, 6.0, 105, 82",
+  "P2, 6.0, 100, 78",
+  "P3, 6.0, 98, 76",
+  "P4, 5.5, 95, 74",
+  "P5, 5.5, 92, 72",
+  "P6, 5.0, 90, 70",
+  "P7, 5.0, 88, 68",
+  "P8, 4.5, 85, 66",
+].join("\n");
+
+/** A gentle arch so the freeform curve draws something the moment it is dropped in. */
+const DEFAULT_POLY = [
+  "# x, y, z per line — a freeform curve through these points",
+  "-3, 0, 0",
+  "-1.5, 1.4, 0",
+  "0, 1.9, 0",
+  "1.5, 1.4, 0",
+  "3, 0, 0",
+].join("\n");
 
 // --- node definitions ---
 export const NODE_DEFS: Record<string, NodeDef> = {
+  point: {
+    type: "point", label: "Point", category: "Geometry",
+    inputs: [], outputs: [{ id: "out", label: "points", kind: "points" }],
+    params: [
+      { key: "x", label: "x", default: 0, step: 0.1 },
+      { key: "y", label: "y", default: 0, step: 0.1 },
+      { key: "z", label: "z", default: 0, step: 0.1 },
+    ],
+    compute: (_i, p) => ({ out: [[num(p, "x"), num(p, "y"), num(p, "z")] as Vec3] }),
+  },
   line: {
     type: "line", label: "Line", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
@@ -63,6 +144,24 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { key: "bx", label: "B.x", default: 2, step: 0.1 }, { key: "by", label: "B.y", default: 0, step: 0.1 }, { key: "bz", label: "B.z", default: 0, step: 0.1 },
     ],
     compute: (_i, p) => ({ out: G.line([num(p, "ax"), num(p, "ay"), num(p, "az")], [num(p, "bx"), num(p, "by"), num(p, "bz")], 2) }),
+  },
+  polyline: {
+    type: "polyline", label: "Polyline (curve)", category: "Geometry",
+    inputs: [{ id: "in", label: "points", kind: "points" }],
+    outputs: [{ id: "out", label: "curve", kind: "curve" }],
+    params: [
+      { key: "pts", label: "points", multiline: true, default: DEFAULT_POLY },
+      { key: "closed", label: "closed", default: "no", options: ["no", "yes"] },
+      { key: "smooth", label: "smooth", default: 12, min: 0, max: 40, step: 1 },
+    ],
+    compute: (i, p) => {
+      // A wired-in point list (from grid, divide, intersect …) wins; otherwise thread the
+      // curve through the hand-typed list — so you can draw a form by hand or fit one to
+      // computed points (§4, §7).
+      const wired = Array.isArray(i.in) && i.in.length && isVec3(i.in[0]) ? (i.in as Vec3[]) : null;
+      const pts = wired ?? G.parsePoints(String(p.pts ?? ""));
+      return { out: G.polyline(pts, p.closed === "yes", num(p, "smooth")) };
+    },
   },
   arc: {
     type: "arc", label: "Arc", category: "Geometry",
@@ -223,6 +322,28 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       out: G.weaveLattice(num(p, "w"), num(p, "h"), num(p, "u"), num(p, "v"), p.plane as "xy" | "xz" | "yz"),
     }),
   },
+  intersect: {
+    type: "intersect", label: "Intersect", category: "Geometry",
+    inputs: [
+      { id: "a", label: "curves A", kind: "curves" },
+      { id: "b", label: "curves B", kind: "curves" },
+    ],
+    outputs: [{ id: "out", label: "points", kind: "points" }],
+    params: [{ key: "tol", label: "tolerance (m)", default: 0.02, min: 0.001, step: 0.005 }],
+    compute: (i, p) => ({ out: G.intersectCurves(curvesOf(i.a), curvesOf(i.b), num(p, "tol")) }),
+  },
+  offset: {
+    type: "offset", label: "Offset", category: "Geometry",
+    inputs: [{ id: "in", label: "curves", kind: "curves" }],
+    outputs: [{ id: "out", label: "curves", kind: "curves" }],
+    params: [
+      { key: "dist", label: "distance (m)", default: 0.4, step: 0.05 },
+      { key: "plane", label: "plane", default: "xy", options: ["xy", "xz", "yz"] },
+    ],
+    compute: (i, p) => ({
+      out: asCurves(i.in).map((c) => G.offsetCurve(c, num(p, "dist"), p.plane as "xy" | "xz" | "yz")),
+    }),
+  },
   culm: {
     type: "culm", label: "Culm", category: "Bamboo",
     inputs: [{ id: "in", label: "curve/points", kind: "curves" }],
@@ -232,12 +353,24 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { key: "d0", label: "Ø start (mm)", default: 90, min: 5, step: 1 },
       { key: "d1", label: "Ø end (mm)", default: 75, min: 5, step: 1 },
       { key: "wall", label: "wall (mm)", default: 12, min: 1, step: 1 },
+      { key: "nodes", label: "node spacing (m)", default: 0.3, min: 0, step: 0.05 },
     ],
-    compute: (i, p) => {
+    compute: (i, p, ctx) => {
       const curves = asCurves(i.in);
-      const out: Element[] = curves.map((c, idx) => ({
-        id: `C${idx + 1}`, kind: "culm", curve: c, length: G.curveLength(c),
+      const spacing = num(p, "nodes");
+      // The atlas species (if chosen) rides along so the schedule can be ordered by pole
+      // type — the culm node is bamboo-aware (§3, §5).
+      const speciesId = String(p.species ?? "");
+      const species = speciesId ? String(p.speciesLabel ?? speciesId) : undefined;
+      const out: Element[] = curves.map((c) => ({
+        id: ctx.nextId("C"), kind: "culm", curve: c, length: G.curveLength(c),
+        species,
         startDiameter: num(p, "d0"), endDiameter: num(p, "d1"), wallThickness: num(p, "wall"),
+        // Taper and node data ride along from the start, so the cut-list reflects real
+        // material rather than an idealised cylinder (§8).
+        nodeSpacing: spacing,
+        nodeCount: spacing > 0 ? G.nodeStations(c, spacing).length : 0,
+        verification: "iso22156-round",
         cutAngleStart: 90, cutAngleEnd: 90,
       }));
       return { out };
@@ -251,11 +384,97 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { key: "w", label: "width (mm)", default: 25, min: 2, step: 1 },
       { key: "t", label: "thick (mm)", default: 6, min: 1, step: 1 },
     ],
-    compute: (i, p) => {
+    compute: (i, p, ctx) => {
       const curves = asCurves(i.in);
-      const out: Element[] = curves.map((c, idx) => ({
-        id: `S${idx + 1}`, kind: "strip", curve: c, length: G.curveLength(c),
+      const out: Element[] = curves.map((c) => ({
+        id: ctx.nextId("S"), kind: "strip", curve: c, length: G.curveLength(c),
         width: num(p, "w"), thickness: num(p, "t"),
+        // A split strip is not a round culm, so ISO 22156 does not reach it (§9).
+        verification: "outside-iso22156",
+      }));
+      return { out };
+    },
+  },
+  internode: {
+    type: "internode", label: "Node / internode", category: "Bamboo",
+    inputs: [{ id: "in", label: "elements", kind: "elements" }],
+    outputs: [
+      { id: "out", label: "elements", kind: "elements" },
+      { id: "nodes", label: "node points", kind: "points" },
+    ],
+    params: [
+      { key: "spacing", label: "node spacing (m)", default: 0.3, min: 0.02, step: 0.01 },
+      { key: "mode", label: "mode", default: "mark", options: ["mark", "split"] },
+    ],
+    compute: (i, p) => {
+      const els = asElements(i.in);
+      const spacing = num(p, "spacing");
+      const split = p.mode === "split";
+      const out: Element[] = [];
+      const nodes: Vec3[] = [];
+      for (const e of els) {
+        // Nodes are a property of round culms; processed stock has none to mark.
+        if (e.kind !== "culm") {
+          out.push(e);
+          continue;
+        }
+        const stations = G.nodeStations(e.curve, spacing);
+        for (const s of stations) nodes.push(G.pointAtLength(e.curve, s));
+        if (!split) {
+          out.push({ ...e, nodeSpacing: spacing, nodeCount: stations.length });
+          continue;
+        }
+        // Cut the culm at its diaphragms; each internode carries its own share of the taper.
+        const segs = G.splitCurveAtLengths(e.curve, stations);
+        const total = e.length || 1;
+        const d0 = e.startDiameter ?? 0;
+        const d1 = e.endDiameter ?? d0;
+        let acc = 0;
+        segs.forEach((c, k) => {
+          const l = G.curveLength(c);
+          out.push({
+            ...e,
+            id: `${e.id}.i${k + 1}`,
+            curve: c,
+            length: l,
+            startDiameter: d0 + (d1 - d0) * (acc / total),
+            endDiameter: d0 + (d1 - d0) * ((acc + l) / total),
+            nodeSpacing: spacing,
+            nodeCount: 0,
+          });
+          acc += l;
+        });
+      }
+      return { out, nodes };
+    },
+  },
+  laminate: {
+    type: "laminate", label: "Laminate (glulam)", category: "Bamboo",
+    inputs: [{ id: "in", label: "curve/points", kind: "curves" }],
+    outputs: [{ id: "out", label: "elements", kind: "elements" }],
+    params: [
+      { key: "w", label: "width (mm)", default: 60, min: 5, step: 1 },
+      { key: "ply", label: "ply thick (mm)", default: 6, min: 0.5, step: 0.5 },
+      { key: "layers", label: "layers", default: 5, min: 2, max: 40, step: 1 },
+      { key: "layup", label: "layup", default: "parallel", options: ["parallel", "alternating"] },
+    ],
+    compute: (i, p, ctx) => {
+      const curves = curvesOf(i.in);
+      const layers = Math.round(num(p, "layers"));
+      const ply = num(p, "ply");
+      const dir = String(p.layup);
+      const family = dir === "alternating" ? "cross-laminated" : "glue-laminated";
+      const out: Element[] = curves.map((c) => ({
+        id: ctx.nextId("L"),
+        kind: "laminate",
+        curve: c,
+        length: G.curveLength(c),
+        width: num(p, "w"),
+        thickness: ply * layers,
+        layers,
+        layup: `${layers} plies × ${ply} mm, ${dir} (${family})`,
+        // ISO 22156:2021 explicitly excludes engineered bamboo — say so (§9).
+        verification: "outside-iso22156",
       }));
       return { out };
     },
@@ -267,33 +486,97 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { id: "out", label: "elements", kind: "elements" },
       { id: "joints", label: "joints", kind: "joints" },
     ],
-    params: [{ key: "tol", label: "tolerance (m)", default: 0.05, min: 0.001, step: 0.01 }],
+    params: [
+      { key: "mode", label: "typing", default: "auto", options: ["auto", "manual"] },
+      { key: "type", label: "type (manual)", default: "", dynamic: "joints" },
+      { key: "splice", label: "splice° (bolt ≥)", default: 150, min: 90, max: 180, step: 5 },
+      { key: "tol", label: "tolerance (m)", default: 0.05, min: 0.001, step: 0.01 },
+    ],
     compute: (i, p) => {
       const els = asElements(i.in);
       const tol = num(p, "tol");
-      const ends: Vec3[] = [];
-      for (const e of els) {
-        ends.push(e.curve.points[0]);
-        ends.push(e.curve.points[e.curve.points.length - 1]);
-      }
+      // In "auto" the connection is typed from each joint's geometry (fish-mouth vs bolt);
+      // in "manual" every joint takes the hand-picked library type. Only a saddle
+      // (fish-mouth) cut shapes the member to the mating culm; the rest butt square (§3).
+      const auto = String(p.mode ?? "auto") !== "manual";
+      const spliceDeg = num(p, "splice");
+      const manualType = String(p.type ?? "");
+
+      type End = { el: number; at: "start" | "end"; pos: Vec3; dir: Vec3 };
+      const ends: End[] = [];
+      els.forEach((e, el) => {
+        const pts = e.curve.points;
+        if (pts.length < 2) return;
+        // Directions point away from the end, so the angle between them is the angle
+        // the two members actually make at the joint.
+        ends.push({ el, at: "start", pos: pts[0], dir: G.normalize(G.sub(pts[1], pts[0])) });
+        ends.push({
+          el, at: "end", pos: pts[pts.length - 1],
+          dir: G.normalize(G.sub(pts[pts.length - 2], pts[pts.length - 1])),
+        });
+      });
+
       const joints: Joint[] = [];
+      const cutAt = new Map<string, number>();
       const used = new Array(ends.length).fill(false);
       for (let a = 0; a < ends.length; a++) {
         if (used[a]) continue;
-        const cluster = [ends[a]];
+        const cluster = [a];
         used[a] = true;
         for (let b = a + 1; b < ends.length; b++) {
-          if (!used[b] && G.len(G.sub(ends[a], ends[b])) < tol) {
-            cluster.push(ends[b]);
+          if (!used[b] && G.len(G.sub(ends[a].pos, ends[b].pos)) < tol) {
+            cluster.push(b);
             used[b] = true;
           }
         }
-        if (cluster.length > 1) {
-          const c = cluster.reduce((s, v) => G.add(s, v), [0, 0, 0] as Vec3);
-          joints.push({ id: `J${joints.length + 1}`, position: G.scale(c, 1 / cluster.length), count: cluster.length });
+        if (cluster.length < 2) continue;
+
+        const centre = G.scale(
+          cluster.reduce((s, k) => G.add(s, ends[k].pos), [0, 0, 0] as Vec3),
+          1 / cluster.length,
+        );
+        // The included angle between the first genuinely divergent pair of members.
+        let angle: number | undefined;
+        outer: for (let x = 0; x < cluster.length; x++) {
+          for (let y = x + 1; y < cluster.length; y++) {
+            const ang = G.angleBetween(ends[cluster[x]].dir, ends[cluster[y]].dir);
+            if (ang > 1) {
+              angle = ang;
+              break outer;
+            }
+          }
+        }
+        const memberIds = Array.from(new Set(cluster.map((k) => els[ends[k].el].id)));
+
+        // Type this specific joint: auto from its geometry, or the hand-picked type.
+        const typeId = auto ? classifyJoint(memberIds.length, angle, spliceDeg) : manualType;
+        const lib = JOINT_LIBRARY[typeId];
+        const typeLabel = typeId ? lib?.label ?? String(p.typeLabel ?? typeId) : undefined;
+        const mitred = lib?.mitred ?? false;
+
+        joints.push({
+          id: `J${joints.length + 1}`,
+          position: centre,
+          count: cluster.length,
+          type: typeId || undefined,
+          typeLabel,
+          angle: angle === undefined ? undefined : Math.round(angle),
+          memberIds,
+        });
+        if (mitred && angle !== undefined) {
+          for (const k of cluster) cutAt.set(`${ends[k].el}:${ends[k].at}`, Math.round(angle));
         }
       }
-      return { out: els, joints };
+
+      // Carry the real cut angles back onto the members (§8).
+      const out = els.map((e, idx) => {
+        const s = cutAt.get(`${idx}:start`);
+        const en = cutAt.get(`${idx}:end`);
+        return s === undefined && en === undefined
+          ? e
+          : { ...e, cutAngleStart: s ?? e.cutAngleStart, cutAngleEnd: en ?? e.cutAngleEnd };
+      });
+      return { out, joints };
     },
   },
   bundle: {
@@ -339,17 +622,31 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       const hasLoad = typeof i.load === "number" && (i.load as number) > 0;
       const flags: CheckFlag[] = [];
       for (const e of els) {
+        const isRound = e.kind === "culm";
         // Slenderness is a purely geometric sanity check (no material assumptions).
-        const dia = e.kind === "culm" ? (e.startDiameter ?? 0) / 1000 : (e.width ?? 0) / 1000;
+        const dia = isRound ? (e.startDiameter ?? 0) / 1000 : (e.width ?? 0) / 1000;
         if (dia > 0) {
           const ratio = e.length / dia;
           if (ratio > limit) {
             flags.push({
               elementId: e.id,
               severity: "warning",
-              message: `Slender: L/Ø = ${ratio.toFixed(0)} (> ${limit}); check buckling per ISO 22156.`,
+              message: isRound
+                ? `Slender: L/Ø = ${ratio.toFixed(0)} (> ${limit}); check buckling per ISO 22156.`
+                : `Slender: L/w = ${ratio.toFixed(0)} (> ${limit}); geometric flag only — the ISO 22156 rule of thumb is for round culms.`,
             });
           }
+        }
+        if (!isRound) {
+          // Never let a round-culm code anchor imply coverage it does not have (§9).
+          flags.push({
+            elementId: e.id,
+            severity: "info",
+            message:
+              e.kind === "laminate"
+                ? `Engineered bamboo (${e.layup ?? "laminated"}) — ISO 22156:2021 explicitly excludes laminated products; validation rests on manufacturer data and project-specific engineering.`
+                : `Processed (split) bamboo — outside ISO 22156:2021, which covers round culms; no settled international code path.`,
+          });
         }
         if (hasLoad) {
           flags.push({
@@ -363,7 +660,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
         flags,
         summary: { checked: els.length, flagged: new Set(flags.filter((f) => f.severity === "warning").map((f) => f.elementId)).size },
         disclaimer:
-          "Advisory sanity checks only — NOT a verified structural analysis. Geometric slenderness is flagged against a coarse ISO 22156 rule of thumb; member capacity, connections, and stability require a licensed structural engineer.",
+          "Advisory sanity checks only — NOT a verified structural analysis. Geometric slenderness is flagged against a coarse ISO 22156 rule of thumb; member capacity, connections, and stability require a licensed structural engineer. ISO 22156:2021 covers round culms only and excludes engineered bamboo (glue-laminated, cross-laminated, oriented-strand, densified) — those elements are labelled, not checked.",
       };
       return { out: els, checks };
     },
@@ -386,19 +683,97 @@ export const NODE_DEFS: Record<string, NodeDef> = {
           e.kind === "culm"
             ? `Ø ${Math.round(e.startDiameter ?? 0)}→${Math.round(e.endDiameter ?? 0)} mm, wall ${Math.round(e.wallThickness ?? 0)} mm`
             : `${Math.round(e.width ?? 0)}×${Math.round(e.thickness ?? 0)} mm`,
+        nodes: e.kind === "culm" ? e.nodeCount : undefined,
+        layup: e.layup,
+        verification: e.verification,
         cut_start_deg: e.cutAngleStart,
         cut_end_deg: e.cutAngleEnd,
       }));
+      // The joint schedule — the other half of the buildable document (§6d, §8).
+      const jointsIn = Array.isArray(i.joints) ? (i.joints as Joint[]) : [];
+      const jointRows: JointRow[] = jointsIn.map((j) => ({
+        id: j.id,
+        type: j.typeLabel ?? j.type ?? "unspecified",
+        members: j.count,
+        memberIds: (j.memberIds ?? []).join(" + "),
+        angle_deg: j.angle,
+        x: round(j.position[0]),
+        y: round(j.position[1]),
+        z: round(j.position[2]),
+      }));
+
+      // Bill of materials — identical pieces collapsed into one orderable line (§8). A
+      // builder cuts "6 × 2.5 m Ø90→75", not six separate sticks.
+      const groupMap = new Map<string, ScheduleGroup>();
+      for (const r of rows) {
+        const key = [r.kind, r.detail, r.length_m, r.layup ?? "", r.verification ?? ""].join("|");
+        const g = groupMap.get(key);
+        if (g) {
+          g.count += 1;
+          g.totalLength_m = round(g.totalLength_m + r.length_m);
+        } else {
+          groupMap.set(key, {
+            kind: r.kind, detail: r.detail, length_m: r.length_m,
+            count: 1, totalLength_m: r.length_m, layup: r.layup, verification: r.verification,
+          });
+        }
+      }
+      const groups = Array.from(groupMap.values()).sort(
+        (a, b) => b.count - a.count || b.totalLength_m - a.totalLength_m,
+      );
+
+      // Culm material rolled up by atlas species — poles are ordered per species (§5, §8).
+      const speciesMap = new Map<string, SpeciesSummary>();
+      for (const e of els) {
+        if (e.kind !== "culm") continue;
+        const key = e.species ?? "Unspecified";
+        const s = speciesMap.get(key) ?? { species: key, count: 0, totalLength_m: 0 };
+        s.count += 1;
+        s.totalLength_m = round(s.totalLength_m + e.length);
+        speciesMap.set(key, s);
+      }
+      const species = Array.from(speciesMap.values()).sort((a, b) => b.totalLength_m - a.totalLength_m);
+
       const totalLength = els.reduce((s, e) => s + e.length, 0);
+      // Only round-culm elements are cut from whole poles; processed stock has its own
+      // yield question, so counting it here would overstate the pole order.
+      const culmLength = els.reduce((s, e) => (e.kind === "culm" ? s + e.length : s), 0);
       const schedule: Schedule = {
         rows,
+        groups,
+        species,
+        joints: jointRows,
         totals: {
           count: els.length,
           totalLength_m: round(totalLength),
-          estCulms: Math.ceil(totalLength / (num(p, "usable") || 6)),
+          estCulms: Math.ceil(culmLength / (num(p, "usable") || 6)),
+          jointCount: jointRows.length,
         },
       };
       return { out: schedule };
+    },
+  },
+  inventory: {
+    type: "inventory", label: "Pole inventory", category: "Output",
+    inputs: [{ id: "in", label: "elements", kind: "elements" }],
+    outputs: [
+      { id: "out", label: "elements", kind: "elements" },
+      { id: "report", label: "reconciliation", kind: "inventory" },
+    ],
+    params: [
+      {
+        key: "poles",
+        label: "measured poles",
+        multiline: true,
+        default: DEFAULT_POLES,
+      },
+      { key: "kerf", label: "saw kerf (m)", default: 0.01, min: 0, step: 0.005 },
+      { key: "tol", label: "Ø tolerance (mm)", default: 5, min: 0, step: 1 },
+    ],
+    compute: (i, p) => {
+      const els = asElements(i.in);
+      const poles = parsePoles(String(p.poles ?? ""));
+      return { out: els, report: reconcile(els, poles, num(p, "kerf"), num(p, "tol")) };
     },
   },
 };

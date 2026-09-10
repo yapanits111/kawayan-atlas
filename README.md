@@ -25,16 +25,24 @@ browser — no install, no plugins. A **node-graph canvas** drives a **live 3D v
 **fabrication cut-list**, built on the whitepaper's architecture in dependency order
 (geometry kernel → live evaluation engine → bamboo nodes → output).
 
-**Node palette:**
-- **Geometry** — line, arc, circle, rectangle, grid, divide, transform, array (linear/polar), mirror, extrude→posts, **loft**, **weave**
-- **Bamboo** — `culm` (tapered tube; **linked to the species atlas** — pick a species to auto-fill its cited diameter/wall), `strip` (flat ribbon), `joint`, `bundle`
+**Node palette** — 26 nodes: the whitepaper's §7 palette in full, plus pole reconciliation. Every node's inputs,
+outputs, and parameters are documented in [`docs/NODE-SPEC.md`](docs/NODE-SPEC.md), which
+is generated from the registry so it cannot drift from the code.
+- **Geometry** — point, line, arc, circle, rectangle, grid, divide, transform, array (linear/polar), mirror, extrude→posts, **loft**, **weave**, **intersect**
+- **Bamboo** — `culm` (tapered tube with **node/diaphragm spacing**; **linked to the species atlas** — pick a species to auto-fill its cited diameter/wall), `strip` (flat ribbon), `internode` (mark a culm's diaphragms, or split it there — each segment keeping its own share of the taper), `laminate` (glue- or cross-laminated layup), `joint` (**linked to the joint library** — a fish-mouth saddle cuts its members to the mating culm's angle; a lashing or bolt butts them square), `bundle`
 - **Analysis** (advisory) — `load`, `support`, `check`: coarse geometric slenderness flags anchored to **ISO 22156**, with a prominent "not a verified analysis" disclaimer; capacity is never computed (Phase 2 / whitepaper §9)
-- **Output** — `schedule` → per-element cut-list, exportable as **CSV / PDF**; the 3D model exports as **GLB** (mesh) or **DXF** (CAD lines)
+- **Output** — `schedule` → **two** buildable documents: a per-element cut-list (taper, node counts, layup, cut angle at each end) and a **joint schedule** (type, which members meet, included angle, location), both exportable as **CSV / PDF**; `inventory` reconciles the design against a yard of **real, measured poles** — which pole each mark is cut from and at what station, the offcut left, and any piece the yard cannot yield (CSV); the 3D model exports as **GLB** (mesh) or **DXF** (CAD lines)
+
+**Honest about what is verifiable.** ISO 22156:2021 covers round culms and *explicitly
+excludes* engineered bamboo. Culms are tagged `iso22156-round`; strips and laminates are
+tagged `outside-iso22156`, badged **no code** in the schedule, and carry a validation-status
+note into the exported PDF — modelled freely, never implied to be code-checked (§9).
 
 **Editor:** live dependency-ordered re-evaluation, autosave + shareable links, undo/redo,
-wire-type validation, node delete/duplicate, a minimap, and seven worked examples
-(barrel vault, lofted shell, post & beam, woven screen, column ring, checked posts). The
-proof chain `arc → divide → culm → array → schedule` ships preloaded.
+wire-type validation, node delete/duplicate, a minimap, and ten worked examples (barrel
+vault, lofted shell, post & beam, woven screen, column ring, checked posts, nodes &
+internodes, laminated arch, lashed screen, pole-yard reconciliation). The proof chain
+`arc → divide → culm → array → schedule` ships preloaded.
 
 ![Design Lab](docs/screenshots/design.png)
 
@@ -156,9 +164,17 @@ The frontend defaults to the API at `http://127.0.0.1:8020`. To point elsewhere,
 # backend (13 API tests, isolated temp database)
 cd backend && .venv/Scripts/python.exe -m pytest -q
 
+# frontend: Design Lab unit tests (geometry kernel, evaluation engine, pole reconciliation)
+cd frontend && npm test
+
 # frontend type-check + build
 cd frontend && npx tsc --noEmit && npm run build
 ```
+
+The Design Lab's pure core is unit-tested with [Vitest](https://vitest.dev/) (59 tests):
+the geometry kernel (`geometry.ts`), the dependency-ordered evaluation engine
+(`evaluate.ts`), and the pole-inventory reconciliation (`inventory.ts`). Run `npm run
+test:watch` for watch mode.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the backend tests plus the
 frontend type-check and build on every push / PR (assumes `kawayan-atlas/` is the repo root).

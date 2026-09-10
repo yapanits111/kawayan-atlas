@@ -4,8 +4,14 @@ import { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
 import * as THREE from "three";
-import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
+import { tubeGeometry, stripGeometry, nodeStations, pointAtLength } from "@/lib/design/geometry";
 import type { Curve, Element, Joint, Vec3 } from "@/lib/design/types";
+
+const ELEMENT_COLOR: Record<Element["kind"], string> = {
+  culm: "#9a8248",
+  strip: "#c2b184",
+  laminate: "#8c6f3f",
+};
 
 function ElementMesh({ el }: { el: Element }) {
   const geo = useMemo(() => {
@@ -14,17 +20,37 @@ function ElementMesh({ el }: { el: Element }) {
       const r1 = (el.endDiameter ?? 70) / 2000;
       return tubeGeometry(el.curve, r0, r1, 10);
     }
+    // A laminate sweeps like a strip, only deeper — plies × ply thickness.
     return stripGeometry(el.curve, (el.width ?? 25) / 1000, (el.thickness ?? 6) / 1000);
   }, [el]);
 
+  // Diaphragms drawn on the culm — the node data the cut-list reports (§8).
+  const nodeRings = useMemo(() => {
+    if (el.kind !== "culm" || !el.nodeSpacing || el.nodeSpacing <= 0) return [];
+    const d0 = el.startDiameter ?? 80;
+    const d1 = el.endDiameter ?? 70;
+    return nodeStations(el.curve, el.nodeSpacing).map((s) => {
+      const t = el.length > 0 ? s / el.length : 0;
+      return { at: pointAtLength(el.curve, s), r: (d0 + (d1 - d0) * t) / 2000 };
+    });
+  }, [el]);
+
   return (
-    <mesh geometry={geo} castShadow>
-      <meshStandardMaterial
-        color={el.kind === "culm" ? "#9a8248" : "#c2b184"}
-        roughness={0.7}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
+    <>
+      <mesh geometry={geo} castShadow>
+        <meshStandardMaterial
+          color={ELEMENT_COLOR[el.kind] ?? "#c2b184"}
+          roughness={0.7}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {nodeRings.map((n, i) => (
+        <mesh key={`${el.id}n${i}`} position={n.at}>
+          <sphereGeometry args={[n.r * 1.1, 10, 6]} />
+          <meshStandardMaterial color="#6d5a2e" roughness={0.85} />
+        </mesh>
+      ))}
+    </>
   );
 }
 
