@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { api, ApiError, type GraphSummary } from "@/lib/api";
@@ -113,13 +113,48 @@ function MyDesigns() {
   const { user, logout } = useAuth();
   const [graphs, setGraphs] = useState<GraphSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api
       .listMyGraphs()
-      .then(setGraphs)
+      .then((gs) => {
+        setGraphs(gs);
+        setError(null);
+      })
       .catch(() => setError("Could not load your designs. Is the backend running?"));
   }, []);
+
+  useEffect(load, [load]);
+
+  async function rename(g: GraphSummary) {
+    const next = window.prompt("Rename design:", g.title ?? "Untitled design");
+    if (next === null) return;
+    setError(null);
+    setBusyId(g.id);
+    try {
+      await api.updateGraph(g.id, { title: next });
+      load();
+    } catch {
+      setError("Could not rename that design.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(g: GraphSummary) {
+    if (!window.confirm(`Delete “${g.title || "Untitled design"}”? This cannot be undone.`)) return;
+    setError(null);
+    setBusyId(g.id);
+    try {
+      await api.deleteGraph(g.id);
+      setGraphs((gs) => (gs ? gs.filter((x) => x.id !== g.id) : gs));
+    } catch {
+      setError("Could not delete that design.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-12">
@@ -145,12 +180,13 @@ function MyDesigns() {
       </div>
 
       <div className="mt-6">
-        {error ? (
-          <div className="rounded-md border border-clay-400/40 bg-clay-400/10 px-3 py-2 text-sm text-clay-700">
+        {error && (
+          <div className="mb-3 rounded-md border border-clay-400/40 bg-clay-400/10 px-3 py-2 text-sm text-clay-700">
             {error}
           </div>
-        ) : graphs === null ? (
-          <div className="text-sm text-bamboo-600">Loading…</div>
+        )}
+        {graphs === null ? (
+          error ? null : <div className="text-sm text-bamboo-600">Loading…</div>
         ) : graphs.length === 0 ? (
           <div className="rounded-lg border border-dashed border-bamboo-300 bg-bamboo-50 px-4 py-10 text-center text-sm text-bamboo-600">
             No saved designs yet. Open the{" "}
@@ -169,12 +205,28 @@ function MyDesigns() {
                     Updated {new Date(g.updated_at).toLocaleDateString()}
                   </div>
                 </div>
-                <Link
-                  href={`/design?g=${g.id}`}
-                  className="shrink-0 rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
-                >
-                  Open
-                </Link>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Link
+                    href={`/design?g=${g.id}`}
+                    className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+                  >
+                    Open
+                  </Link>
+                  <button
+                    onClick={() => rename(g)}
+                    disabled={busyId === g.id}
+                    className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100 disabled:opacity-50"
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={() => remove(g)}
+                    disabled={busyId === g.id}
+                    className="rounded-md border border-clay-400/50 bg-white px-3 py-1.5 text-sm font-medium text-clay-700 hover:bg-clay-400/10 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

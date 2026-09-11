@@ -231,6 +231,50 @@ def test_anonymous_graph_has_no_owner(client):
     assert created.json()["owner_id"] is None
 
 
+def test_owner_can_rename_update_and_delete(client):
+    token = _register(client, "editor@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    gid = client.post(
+        "/api/graphs", json={"data": {"nodes": [], "edges": []}, "title": "First"}, headers=auth
+    ).json()["id"]
+
+    # rename
+    r = client.patch(f"/api/graphs/{gid}", json={"title": "Renamed"}, headers=auth)
+    assert r.status_code == 200 and r.json()["title"] == "Renamed"
+
+    # update-in-place (data changes, same id)
+    newdata = {"nodes": [{"id": "n1", "type": "graphNode", "data": {"type": "arc", "params": {}}}], "edges": []}
+    r = client.patch(f"/api/graphs/{gid}", json={"data": newdata}, headers=auth)
+    assert r.status_code == 200
+    assert client.get(f"/api/graphs/{gid}").json()["data"]["nodes"][0]["id"] == "n1"
+
+    # delete
+    assert client.delete(f"/api/graphs/{gid}", headers=auth).status_code == 204
+    assert client.get(f"/api/graphs/{gid}").status_code == 404
+    assert client.get("/api/graphs/mine", headers=auth).json() == []
+
+
+def test_cannot_edit_or_delete_someone_elses_graph(client):
+    tok_a = _register(client, "own-a@example.com").json()["access_token"]
+    tok_b = _register(client, "own-b@example.com").json()["access_token"]
+    gid = client.post(
+        "/api/graphs", json={"data": {"nodes": [], "edges": []}}, headers={"Authorization": f"Bearer {tok_a}"}
+    ).json()["id"]
+
+    # B cannot see, rename, or delete A's graph — all read as 404 (no probing).
+    b = {"Authorization": f"Bearer {tok_b}"}
+    assert client.patch(f"/api/graphs/{gid}", json={"title": "hijack"}, headers=b).status_code == 404
+    assert client.delete(f"/api/graphs/{gid}", headers=b).status_code == 404
+    # ...and the graph is untouched.
+    assert client.get(f"/api/graphs/{gid}").status_code == 200
+
+
+def test_edit_and_delete_require_auth(client):
+    gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}}).json()["id"]
+    assert client.patch(f"/api/graphs/{gid}", json={"title": "x"}).status_code == 401
+    assert client.delete(f"/api/graphs/{gid}").status_code == 401
+
+
 def test_calculator_is_gated_off(client):
     r = client.post(
         "/api/calculator/single-member",

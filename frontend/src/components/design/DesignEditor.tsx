@@ -98,7 +98,12 @@ export function DesignEditor() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [savedToAccount, setSavedToAccount] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The currently-loaded saved graph (from a share/gallery link or a prior save this
+  // session). If the signed-in user owns it, Save updates it in place instead of
+  // creating a duplicate.
+  const [loadedGraph, setLoadedGraph] = useState<{ id: string; ownerId: string | null; title: string | null } | null>(null);
   const { user } = useAuth();
+  const ownsLoaded = !!user && !!loadedGraph && loadedGraph.ownerId === user.id;
   const restored = useRef(false);
   const history = useRef<{ stack: string[]; index: number }>({ stack: [], index: -1 });
   const [canUndo, setCanUndo] = useState(false);
@@ -157,7 +162,15 @@ export function DesignEditor() {
       }
     };
     if (gid) {
-      api.getGraph(gid).then((doc) => applyGraph(doc.data)).catch(() => {});
+      // Remember the opened graph's owner/title so a later Save can update it in place
+      // (ownership is judged against the signed-in user at save time).
+      api
+        .getGraph(gid)
+        .then((doc) => {
+          applyGraph(doc.data);
+          setLoadedGraph({ id: doc.id, ownerId: doc.owner_id ?? null, title: doc.title ?? null });
+        })
+        .catch(() => {});
       return;
     }
     try {
@@ -368,21 +381,34 @@ export function DesignEditor() {
     ]);
   }
 
-  async function saveAndShare() {
-    // Signed in: name the design so it lands in the account's gallery. Cancelling the
-    // prompt aborts the save. Anonymous: save straight to a shareable link as before.
-    let title: string | null | undefined;
-    if (user) {
-      title = window.prompt("Name this design (saved to your account):", "Untitled design");
-      if (title === null) return;
-    }
+  function showSaved(id: string) {
+    const url = `${window.location.origin}/design?g=${id}`;
+    setShareUrl(url);
+    setSavedToAccount(!!user);
+    window.history.replaceState(null, "", `/design?g=${id}`);
+  }
+
+  /** Save the graph. If the signed-in user owns the loaded graph, update it in place;
+   *  otherwise create a new one (naming it when signed in). `forceNew` always creates a
+   *  copy — the "Save as new" path. Anonymous saves are unchanged from Release 1. */
+  async function saveAndShare(forceNew = false) {
+    const data = serialize(nodes, edges);
     setSaving(true);
     try {
-      const doc = await api.createGraph(serialize(nodes, edges), title);
-      const url = `${window.location.origin}/design?g=${doc.id}`;
-      setShareUrl(url);
-      setSavedToAccount(!!user);
-      window.history.replaceState(null, "", `/design?g=${doc.id}`);
+      if (ownsLoaded && !forceNew && loadedGraph) {
+        const doc = await api.updateGraph(loadedGraph.id, { data });
+        showSaved(doc.id);
+      } else if (user) {
+        const suggested = forceNew && loadedGraph?.title ? `${loadedGraph.title} (copy)` : "Untitled design";
+        const title = window.prompt("Name this design (saved to your account):", suggested);
+        if (title === null) return; // cancelled
+        const doc = await api.createGraph(data, title);
+        setLoadedGraph({ id: doc.id, ownerId: user.id, title: title.trim() || null });
+        showSaved(doc.id);
+      } else {
+        const doc = await api.createGraph(data);
+        showSaved(doc.id);
+      }
     } catch {
       setShareUrl(null);
     } finally {
@@ -396,6 +422,7 @@ export function DesignEditor() {
     setNodes(ex.graph.nodes as unknown as Node[]);
     setEdges(ex.graph.edges as unknown as Edge[]);
     setShareUrl(null);
+    setLoadedGraph(null); // an example is a fresh start, not the opened design
     window.history.replaceState(null, "", "/design");
   }
 
@@ -403,6 +430,7 @@ export function DesignEditor() {
     setNodes(INITIAL_NODES);
     setEdges(INITIAL_EDGES);
     setShareUrl(null);
+    setLoadedGraph(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -555,12 +583,23 @@ export function DesignEditor() {
             + Note
           </button>
           <button
-            onClick={saveAndShare}
+            onClick={() => saveAndShare()}
             disabled={saving}
+            title={ownsLoaded ? "Update this saved design in place" : "Save and get a shareable link"}
             className="rounded-md bg-leaf-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-leaf-700 disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save & share"}
+            {saving ? "Saving…" : ownsLoaded ? "Update" : "Save & share"}
           </button>
+          {ownsLoaded && (
+            <button
+              onClick={() => saveAndShare(true)}
+              disabled={saving}
+              title="Save a separate copy to your account"
+              className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100 disabled:opacity-60"
+            >
+              Save as new
+            </button>
+          )}
           <select
             className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800"
             value=""

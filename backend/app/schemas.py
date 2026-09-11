@@ -125,6 +125,14 @@ class GraphSummary(BaseModel):
     updated_at: datetime
 
 
+class GraphUpdate(BaseModel):
+    """Partial update of an owned graph: rename (title) and/or overwrite (data).
+    Both optional so the same endpoint serves a rename and an update-in-place."""
+
+    title: str | None = Field(default=None, max_length=120)
+    data: dict | None = None
+
+
 # --- Accounts (Release 2) ---
 
 

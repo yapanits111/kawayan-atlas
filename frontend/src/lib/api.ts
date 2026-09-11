@@ -156,9 +156,9 @@ async function getJSON<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function postJSON<T>(path: string, body: unknown): Promise<T> {
+async function sendJSON<T>(method: "POST" | "PATCH", path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
@@ -166,6 +166,16 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
     throw new ApiError(res.status, await errorMessage(res, path));
   }
   return res.json() as Promise<T>;
+}
+
+const postJSON = <T>(path: string, body: unknown) => sendJSON<T>("POST", path, body);
+const patchJSON = <T>(path: string, body: unknown) => sendJSON<T>("PATCH", path, body);
+
+async function del(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) {
+    throw new ApiError(res.status, await errorMessage(res, path));
+  }
 }
 
 export const api = {
@@ -194,6 +204,9 @@ export const api = {
   createGraph: (data: { nodes: unknown[]; edges: unknown[] }, title?: string | null) =>
     postJSON<GraphDoc>(`/api/graphs`, { data, title: title ?? null }),
   getGraph: (id: string) => getJSON<GraphDoc>(`/api/graphs/${id}`),
+  updateGraph: (id: string, patch: { title?: string; data?: { nodes: unknown[]; edges: unknown[] } }) =>
+    patchJSON<GraphDoc>(`/api/graphs/${id}`, patch),
+  deleteGraph: (id: string) => del(`/api/graphs/${id}`),
   // Accounts (Release 2)
   register: (email: string, password: string) =>
     postJSON<TokenResponse>(`/api/auth/register`, { email, password }),
