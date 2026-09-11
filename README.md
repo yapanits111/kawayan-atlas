@@ -11,8 +11,10 @@ studio, and a (safety-gated) structural calculator, in front of an aesthetic lan
 > the LGU building-permit process. Every structural output is advisory, gated behind
 > engineer review, and numeric facts are cited to their sources.
 
-This repository is **Release 1**: a full-stack demo with **no login**, designed to run
-entirely on free tiers. See [`PLAN.md`](PLAN.md) for the full product & build plan and
+This repository is **Release 1** (a full-stack demo designed to run entirely on free tiers)
+plus the start of **Release 2**: optional **accounts** with a personal **"My designs"**
+gallery. Sign-in is entirely optional — every anonymous share link keeps working exactly as
+before. See [`PLAN.md`](PLAN.md) for the full product & build plan and
 [`DEPLOYMENT.md`](DEPLOYMENT.md) for the $0 deployment guide.
 
 ---
@@ -188,10 +190,13 @@ frontend type-check and build on every push / PR (assumes `kawayan-atlas/` is th
 | `bamboo_species` | Species atlas content (properties, roles, sources) |
 | `joint_types` | Joint/connection library |
 | `templates` | Template gallery (components + bill of materials) |
-| `designs` | Anonymous saved/shared designs (owner added in Release 2 with accounts) |
+| `designs` | Anonymous saved/shared Studio designs |
+| `graphs` | Saved Design Lab node graphs — shareable by link, and (Release 2) optionally owned by a user |
+| `users` | Accounts (Release 2). Passwords are stored only as salted PBKDF2-HMAC hashes |
 
-Content types map 1:1 to future database tables, and the calculator is a pure function —
-so the Release 2 additions (accounts, community) are extensions, not a rewrite.
+Auth is dependency-free (Python stdlib: PBKDF2 hashing + HMAC-signed bearer tokens); the
+`SECRET_KEY` env var signs tokens in production. Sign-in is optional and additive — anonymous
+share links are unchanged — so the Release 2 additions are extensions, not a rewrite.
 
 ---
 

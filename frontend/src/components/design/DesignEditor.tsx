@@ -17,6 +17,7 @@ import {
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
+import { useAuth } from "@/components/AuthProvider";
 import { GraphNode } from "./GraphNode";
 import { NoteNode } from "./NoteNode";
 import { Viewport3D } from "./Viewport3D";
@@ -95,7 +96,9 @@ export function DesignEditor() {
   const idCounter = useRef(100);
   const clipboard = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [savedToAccount, setSavedToAccount] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
   const restored = useRef(false);
   const history = useRef<{ stack: string[]; index: number }>({ stack: [], index: -1 });
   const [canUndo, setCanUndo] = useState(false);
@@ -366,11 +369,19 @@ export function DesignEditor() {
   }
 
   async function saveAndShare() {
+    // Signed in: name the design so it lands in the account's gallery. Cancelling the
+    // prompt aborts the save. Anonymous: save straight to a shareable link as before.
+    let title: string | null | undefined;
+    if (user) {
+      title = window.prompt("Name this design (saved to your account):", "Untitled design");
+      if (title === null) return;
+    }
     setSaving(true);
     try {
-      const doc = await api.createGraph(serialize(nodes, edges));
+      const doc = await api.createGraph(serialize(nodes, edges), title);
       const url = `${window.location.origin}/design?g=${doc.id}`;
       setShareUrl(url);
+      setSavedToAccount(!!user);
       window.history.replaceState(null, "", `/design?g=${doc.id}`);
     } catch {
       setShareUrl(null);
@@ -604,6 +615,11 @@ export function DesignEditor() {
           >
             Copy
           </button>
+          {savedToAccount && (
+            <a href="/account" className="whitespace-nowrap font-medium text-leaf-700 underline">
+              Saved to My designs
+            </a>
+          )}
         </div>
       )}
 

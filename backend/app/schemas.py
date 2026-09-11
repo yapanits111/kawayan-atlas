@@ -96,9 +96,11 @@ class DesignOut(BaseModel):
 
 
 class GraphCreate(BaseModel):
-    """A Design Lab node graph. `data` holds {nodes, edges}; counts are capped."""
+    """A Design Lab node graph. `data` holds {nodes, edges}; counts are capped.
+    An optional title is used when the graph is saved to an account's gallery."""
 
     data: dict
+    title: str | None = Field(default=None, max_length=120)
 
 
 class GraphOut(BaseModel):
@@ -106,8 +108,48 @@ class GraphOut(BaseModel):
 
     id: str
     data: dict
+    owner_id: str | None = None
+    title: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class GraphSummary(BaseModel):
+    """A lightweight row for the "My designs" gallery — no heavy `data` payload."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# --- Accounts (Release 2) ---
+
+
+class RegisterIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=200)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    created_at: datetime
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
 
 
 # --- Calculator (gated OFF until SME review; see PLAN.md 3E/3F/7) ---

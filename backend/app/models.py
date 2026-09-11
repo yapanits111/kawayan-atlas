@@ -84,14 +84,33 @@ class Design(Base):
     template: Mapped["Template | None"] = relationship()
 
 
+class User(Base):
+    """A registered account (Release 2). Passwords are stored only as salted hashes."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class Graph(Base):
-    """A saved Design Lab node graph (anonymous, shareable by id — Release 1)."""
+    """A saved Design Lab node graph. Shareable by id (anonymous, Release 1); in Release 2
+    it may also belong to an account and carry a title for the owner's gallery."""
 
     __tablename__ = "graphs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     data: Mapped[dict] = mapped_column(JSON, default=dict)  # {nodes:[...], edges:[...]}
+    # Nullable so anonymous share links keep working exactly as before.
+    owner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
+
+    owner: Mapped["User | None"] = relationship()
