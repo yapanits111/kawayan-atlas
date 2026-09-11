@@ -104,6 +104,8 @@ export function DesignEditor() {
   const [loadedGraph, setLoadedGraph] = useState<{ id: string; ownerId: string | null; title: string | null } | null>(null);
   const { user } = useAuth();
   const ownsLoaded = !!user && !!loadedGraph && loadedGraph.ownerId === user.id;
+  // Signed in, looking at a shared design that isn't yours — Save claims a copy.
+  const viewingOthers = !!user && !!loadedGraph && !ownsLoaded;
   const restored = useRef(false);
   const history = useRef<{ stack: string[]; index: number }>({ stack: [], index: -1 });
   const [canUndo, setCanUndo] = useState(false);
@@ -585,10 +587,16 @@ export function DesignEditor() {
           <button
             onClick={() => saveAndShare()}
             disabled={saving}
-            title={ownsLoaded ? "Update this saved design in place" : "Save and get a shareable link"}
+            title={
+              ownsLoaded
+                ? "Update this saved design in place"
+                : viewingOthers
+                  ? "Save your own copy of this shared design to My designs"
+                  : "Save and get a shareable link"
+            }
             className="rounded-md bg-leaf-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-leaf-700 disabled:opacity-60"
           >
-            {saving ? "Saving…" : ownsLoaded ? "Update" : "Save & share"}
+            {saving ? "Saving…" : ownsLoaded ? "Update" : viewingOthers ? "Save a copy" : "Save & share"}
           </button>
           {ownsLoaded && (
             <button

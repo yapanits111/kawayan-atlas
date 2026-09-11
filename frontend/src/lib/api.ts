@@ -220,7 +220,8 @@ export const api = {
     postJSON<TokenResponse>(`/api/auth/login`, { email, password }),
   me: () => getJSON<AuthUser>(`/api/auth/me`),
   changePassword: (current_password: string, new_password: string) =>
-    sendNoBody("POST", `/api/auth/change-password`, { current_password, new_password }),
+    postJSON<TokenResponse>(`/api/auth/change-password`, { current_password, new_password }),
+  logoutAll: () => sendNoBody("POST", `/api/auth/logout-all`),
   deleteAccount: () => sendNoBody("DELETE", `/api/auth/me`),
   listMyGraphs: () => getJSON<GraphSummary[]>(`/api/graphs/mine`),
   calculateSingleMember: (body: {

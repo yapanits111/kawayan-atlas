@@ -160,16 +160,30 @@ describe("auth methods", () => {
     expect(res.access_token).toBe("tk");
   });
 
-  it("changePassword posts to change-password with auth + body", async () => {
+  it("changePassword posts to change-password and returns the rotated token", async () => {
     setToken("t");
-    fetchMock.mockResolvedValue(noContentRes());
-    await api.changePassword("old", "newpassword1");
+    fetchMock.mockResolvedValue(
+      jsonRes({ access_token: "tk2", token_type: "bearer", user: { id: "u", email: "a@b.com", created_at: "c" } }),
+    );
+    const res = await api.changePassword("old", "newpassword1");
     const { url, init } = lastCall();
     expect(url).toBe(`${BASE}/api/auth/change-password`);
     expect(init.method).toBe("POST");
     expect(init.headers["Content-Type"]).toBe("application/json");
     expect(init.headers.Authorization).toBe("Bearer t");
     expect(JSON.parse(init.body)).toEqual({ current_password: "old", new_password: "newpassword1" });
+    expect(res.access_token).toBe("tk2");
+  });
+
+  it("logoutAll POSTs to logout-all with no body", async () => {
+    setToken("t");
+    fetchMock.mockResolvedValue(noContentRes());
+    await api.logoutAll();
+    const { url, init } = lastCall();
+    expect(url).toBe(`${BASE}/api/auth/logout-all`);
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect(init.headers.Authorization).toBe("Bearer t");
   });
 
   it("deleteAccount DELETEs /api/auth/me", async () => {

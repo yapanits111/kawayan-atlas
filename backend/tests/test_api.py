@@ -292,11 +292,31 @@ def test_change_password(client):
         json={"current_password": "oldpassword1", "new_password": "newpassword2"},
         headers=auth,
     )
-    assert ok.status_code == 204
+    assert ok.status_code == 200
+    new_token = ok.json()["access_token"]
+
+    # the old token is revoked (version bumped); the freshly-issued one works
+    assert client.get("/api/auth/me", headers=auth).status_code == 401
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {new_token}"}).status_code == 200
 
     # old password no longer works; new one does
     assert client.post("/api/auth/login", json={"email": "changer@example.com", "password": "oldpassword1"}).status_code == 401
     assert client.post("/api/auth/login", json={"email": "changer@example.com", "password": "newpassword2"}).status_code == 200
+
+
+def test_logout_all_revokes_every_token(client):
+    token = _register(client, "revoke@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/auth/me", headers=auth).status_code == 200
+
+    assert client.post("/api/auth/logout-all", headers=auth).status_code == 204
+    # the caller's own token is now revoked too
+    assert client.get("/api/auth/me", headers=auth).status_code == 401
+    assert client.post("/api/auth/logout-all").status_code == 401  # requires auth
+
+    # logging in again mints a fresh, valid token
+    fresh = client.post("/api/auth/login", json={"email": "revoke@example.com", "password": "hunter2pass"}).json()["access_token"]
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200
 
 
 def test_change_password_rejects_short_new_and_requires_auth(client):

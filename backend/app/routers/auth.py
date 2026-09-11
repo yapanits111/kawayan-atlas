@@ -28,13 +28,19 @@ def get_optional_user(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User | None:
-    """Resolve the bearer token to a user, or None if absent/invalid — never raises."""
+    """Resolve the bearer token to a user, or None if absent/invalid — never raises.
+    A token whose version is behind the user's current token_version is treated as
+    revoked (e.g. after a password change or "log out everywhere")."""
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
-    user_id = verify_token(authorization[7:].strip())
-    if not user_id:
+    claim = verify_token(authorization[7:].strip())
+    if claim is None:
         return None
-    return db.get(User, user_id)
+    user_id, version = claim
+    user = db.get(User, user_id)
+    if user is None or user.token_version != version:
+        return None
+    return user
 
 
 def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
@@ -55,7 +61,7 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(access_token=create_token(user.id, user.token_version), user=UserOut.model_validate(user))
 
 
 @router.post("/login", response_model=TokenOut)
@@ -65,7 +71,7 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
     # Same error whether the email is unknown or the password is wrong (no user enumeration).
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(access_token=create_token(user.id, user.token_version), user=UserOut.model_validate(user))
 
 
 @router.get("/me", response_model=UserOut)
@@ -73,7 +79,7 @@ def me(user: User = Depends(get_current_user)):
     return user
 
 
-@router.post("/change-password", status_code=204)
+@router.post("/change-password", response_model=TokenOut)
 def change_password(
     payload: ChangePasswordIn,
     db: Session = Depends(get_db),
@@ -82,6 +88,17 @@ def change_password(
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Your current password is incorrect")
     user.password_hash = hash_password(payload.new_password)
+    # Revoke every existing token, then hand the caller a fresh one so this session stays in.
+    user.token_version += 1
+    db.commit()
+    db.refresh(user)
+    return TokenOut(access_token=create_token(user.id, user.token_version), user=UserOut.model_validate(user))
+
+
+@router.post("/logout-all", status_code=204)
+def logout_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Revoke every outstanding token for this account (including the caller's)."""
+    user.token_version += 1
     db.commit()
     return Response(status_code=204)
 

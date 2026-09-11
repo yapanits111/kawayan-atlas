@@ -48,15 +48,17 @@ def _sign(payload: str) -> str:
     return hmac.new(settings.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def create_token(user_id: str) -> str:
-    """A stateless bearer token: base64url(user_id:expiry).signature."""
+def create_token(user_id: str, token_version: int) -> str:
+    """A stateless bearer token: base64url(user_id:version:expiry).signature. The version
+    lets the server revoke every outstanding token by bumping the user's token_version."""
     exp = int(time.time()) + settings.token_ttl_seconds
-    payload = _b64url(f"{user_id}:{exp}".encode())
+    payload = _b64url(f"{user_id}:{token_version}:{exp}".encode())
     return f"{payload}.{_sign(payload)}"
 
 
-def verify_token(token: str) -> str | None:
-    """Return the user id if the token's signature is valid and it has not expired."""
+def verify_token(token: str) -> tuple[str, int] | None:
+    """Return (user_id, token_version) if the signature is valid and unexpired, else None.
+    The caller must still check the version against the user's current token_version."""
     try:
         payload, sig = token.split(".", 1)
     except ValueError:
@@ -64,9 +66,9 @@ def verify_token(token: str) -> str | None:
     if not hmac.compare_digest(sig, _sign(payload)):
         return None
     try:
-        user_id, exp_s = _b64url_decode(payload).decode().rsplit(":", 1)
+        user_id, ver_s, exp_s = _b64url_decode(payload).decode().rsplit(":", 2)
     except (ValueError, UnicodeDecodeError):
         return None
     if int(exp_s) < int(time.time()):
         return None
-    return user_id
+    return user_id, int(ver_s)

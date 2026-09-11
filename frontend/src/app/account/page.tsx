@@ -239,7 +239,7 @@ function MyDesigns() {
 }
 
 function AccountSettings() {
-  const { logout } = useAuth();
+  const { changePassword: doChangePassword, logout, logoutEverywhere } = useAuth();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -250,15 +250,20 @@ function AccountSettings() {
     setMsg(null);
     setBusy(true);
     try {
-      await api.changePassword(current, next);
+      await doChangePassword(current, next);
       setCurrent("");
       setNext("");
-      setMsg({ kind: "ok", text: "Password updated." });
+      setMsg({ kind: "ok", text: "Password updated. Other devices have been signed out." });
     } catch (err) {
       setMsg({ kind: "err", text: err instanceof ApiError ? err.message : "Could not change your password." });
     } finally {
       setBusy(false);
     }
+  }
+
+  async function signOutEverywhere() {
+    if (!window.confirm("Sign out on all devices? You'll need to log in again here too.")) return;
+    await logoutEverywhere();
   }
 
   async function deleteAccount() {
@@ -312,6 +317,16 @@ function AccountSettings() {
           {busy ? "Updating…" : "Update password"}
         </button>
       </form>
+
+      <div className="mt-6 max-w-sm">
+        <button
+          onClick={signOutEverywhere}
+          className="rounded-md border border-bamboo-300 bg-white px-4 py-2 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+        >
+          Sign out on all devices
+        </button>
+        <p className="mt-1 text-xs text-bamboo-600">Revokes every active sign-in for your account.</p>
+      </div>
 
       <div className="mt-8 max-w-sm rounded-lg border border-clay-400/40 bg-clay-400/5 p-4">
         <div className="text-sm font-semibold text-clay-700">Danger zone</div>
