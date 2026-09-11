@@ -342,6 +342,15 @@ def test_delete_account_removes_user_and_owned_graphs(client):
     assert client.delete("/api/auth/me").status_code == 401  # requires auth
 
 
+def test_login_is_rate_limited(client):
+    _register(client, "rl@example.com")
+    # 10 attempts are allowed within the window; the 11th is throttled.
+    for _ in range(10):
+        client.post("/api/auth/login", json={"email": "rl@example.com", "password": "wrongpass"})
+    r = client.post("/api/auth/login", json={"email": "rl@example.com", "password": "wrongpass"})
+    assert r.status_code == 429
+
+
 def test_calculator_is_gated_off(client):
     r = client.post(
         "/api/calculator/single-member",

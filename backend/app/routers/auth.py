@@ -1,15 +1,20 @@
 """Accounts: register, login, settings, and the current-user dependencies (Release 2)."""
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Graph, User
+from ..ratelimit import check as rate_check
 from ..schemas import ChangePasswordIn, LoginIn, RegisterIn, TokenOut, UserOut
 from ..security import create_token, hash_password, verify_password, verify_token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 def _normalize_email(email: str) -> str:
@@ -51,7 +56,8 @@ def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
 
 
 @router.post("/register", response_model=TokenOut, status_code=201)
-def register(payload: RegisterIn, db: Session = Depends(get_db)):
+def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db)):
+    rate_check(f"register:{_client_ip(request)}", limit=5, window_seconds=60)
     email = _normalize_email(payload.email)
     if not _valid_email(email):
         raise HTTPException(status_code=422, detail="Enter a valid email address")
@@ -65,7 +71,8 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenOut)
-def login(payload: LoginIn, db: Session = Depends(get_db)):
+def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
+    rate_check(f"login:{_client_ip(request)}", limit=10, window_seconds=60)
     email = _normalize_email(payload.email)
     user = db.query(User).filter(User.email == email).first()
     # Same error whether the email is unknown or the password is wrong (no user enumeration).

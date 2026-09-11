@@ -18,6 +18,7 @@ import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
 import { useAuth } from "@/components/AuthProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GraphNode } from "./GraphNode";
 import { NoteNode } from "./NoteNode";
 import { Viewport3D } from "./Viewport3D";
@@ -696,12 +697,14 @@ export function DesignEditor() {
 
         <div className="grid min-h-0 grid-rows-[1.4fr_1fr]">
           <div className="min-h-0 bg-bamboo-100">
-            <Viewport3D
-              elements={result.scene.elements}
-              curves={result.scene.curves}
-              points={result.scene.points}
-              joints={result.scene.joints}
-            />
+            <ErrorBoundary label="The 3D view hit an error rendering this design.">
+              <Viewport3D
+                elements={result.scene.elements}
+                curves={result.scene.curves}
+                points={result.scene.points}
+                joints={result.scene.joints}
+              />
+            </ErrorBoundary>
           </div>
           <div className="min-h-0 border-t border-bamboo-200 bg-white">
             <OutputPanel schedule={result.schedule} checks={result.checks} inventory={result.inventory} />
