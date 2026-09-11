@@ -83,14 +83,75 @@ export class ApiError extends Error {
 export interface GraphDoc {
   id: string;
   data: { nodes: unknown[]; edges: unknown[] };
+  owner_id?: string | null;
+  title?: string | null;
   created_at: string;
   updated_at: string;
 }
 
+export interface GraphSummary {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+// --- auth token storage (per-browser; guarded for SSR / private mode) ---
+const TOKEN_KEY = "kawayan-auth-token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+export function setToken(token: string) {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* ignore */
+  }
+}
+export function clearToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+function authHeaders(): Record<string, string> {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+/** Pull FastAPI's `{detail: "..."}` message out of an error response, if present. */
+async function errorMessage(res: Response, path: string): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body && typeof body.detail === "string") return body.detail;
+  } catch {
+    /* fall through */
+  }
+  return `API ${path} failed: ${res.status}`;
+}
+
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers: authHeaders() });
   if (!res.ok) {
-    throw new ApiError(res.status, `API ${path} failed: ${res.status}`);
+    throw new ApiError(res.status, await errorMessage(res, path));
   }
   return res.json() as Promise<T>;
 }
@@ -98,11 +159,11 @@ async function getJSON<T>(path: string): Promise<T> {
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status}`);
+    throw new ApiError(res.status, await errorMessage(res, path));
   }
   return res.json() as Promise<T>;
 }
@@ -130,9 +191,16 @@ export const api = {
     params?: Record<string, unknown>;
   }) => postJSON<Design>(`/api/designs`, body),
   getDesign: (id: string) => getJSON<Design>(`/api/designs/${id}`),
-  createGraph: (data: { nodes: unknown[]; edges: unknown[] }) =>
-    postJSON<GraphDoc>(`/api/graphs`, { data }),
+  createGraph: (data: { nodes: unknown[]; edges: unknown[] }, title?: string | null) =>
+    postJSON<GraphDoc>(`/api/graphs`, { data, title: title ?? null }),
   getGraph: (id: string) => getJSON<GraphDoc>(`/api/graphs/${id}`),
+  // Accounts (Release 2)
+  register: (email: string, password: string) =>
+    postJSON<TokenResponse>(`/api/auth/register`, { email, password }),
+  login: (email: string, password: string) =>
+    postJSON<TokenResponse>(`/api/auth/login`, { email, password }),
+  me: () => getJSON<AuthUser>(`/api/auth/me`),
+  listMyGraphs: () => getJSON<GraphSummary[]>(`/api/graphs/mine`),
   calculateSingleMember: (body: {
     species_id: string;
     diameter_mm: number;
