@@ -314,6 +314,7 @@ function AccountSettings() {
           required
           autoComplete="current-password"
           placeholder="Current password"
+          aria-label="Current password"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
           className="w-full rounded-md border border-bamboo-300 px-3 py-2 text-sm outline-none focus:border-leaf-500"
@@ -324,6 +325,7 @@ function AccountSettings() {
           minLength={8}
           autoComplete="new-password"
           placeholder="New password (min 8 characters)"
+          aria-label="New password"
           value={next}
           onChange={(e) => setNext(e.target.value)}
           className="w-full rounded-md border border-bamboo-300 px-3 py-2 text-sm outline-none focus:border-leaf-500"

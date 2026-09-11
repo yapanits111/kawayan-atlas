@@ -24,6 +24,7 @@ export function NoteNode({ id, data, selected }: NodeProps) {
         <button
           onClick={() => d.deleteNode?.(id)}
           title="Delete note"
+          aria-label="Delete note"
           className="nodrag absolute right-1 top-1 z-10 rounded px-1 text-xs leading-none text-leaf-700/70 hover:bg-leaf-200 hover:text-leaf-800"
         >
           ×
@@ -32,6 +33,7 @@ export function NoteNode({ id, data, selected }: NodeProps) {
       <textarea
         value={d.text ?? ""}
         placeholder="Note…"
+        aria-label="Note text"
         onChange={(e) => d.updateNote?.(id, e.target.value)}
         className="nodrag nowheel h-full w-full resize-none rounded-lg border-0 bg-transparent p-2 pr-5 text-xs font-medium text-leaf-800 outline-none placeholder:text-leaf-500/60"
         spellCheck={false}

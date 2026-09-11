@@ -80,6 +80,7 @@ export function AddNodeMenu({ onAdd }: { onAdd: (type: string) => void }) {
                 else if (e.key === "Escape") setOpen(false);
               }}
               placeholder="Search nodes…"
+              aria-label="Search nodes"
               className="w-full rounded border border-bamboo-200 px-2 py-1 text-sm outline-none focus:border-leaf-500"
             />
           </div>

@@ -99,6 +99,7 @@ export function DesignEditor() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [savedToAccount, setSavedToAccount] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   // The currently-loaded saved graph (from a share/gallery link or a prior save this
   // session). If the signed-in user owns it, Save updates it in place instead of
   // creating a duplicate.
@@ -645,6 +646,28 @@ export function DesignEditor() {
           >
             Reset
           </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowHelp((v) => !v)}
+              aria-label="Keyboard shortcuts"
+              title="Keyboard shortcuts"
+              className="rounded-md border border-bamboo-300 bg-white px-2.5 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+            >
+              ⌨
+            </button>
+            {showHelp && (
+              <div className="absolute right-0 z-30 mt-1 w-64 rounded-lg border border-bamboo-200 bg-white p-3 text-xs shadow-lg">
+                <div className="mb-1.5 font-semibold text-leaf-800">Keyboard &amp; mouse</div>
+                <ul className="space-y-1 text-bamboo-700">
+                  <li>Drag a port to a port to <strong>connect</strong></li>
+                  <li><strong>Shift-drag</strong> the canvas to box-select</li>
+                  <li><strong>Ctrl/⌘ C</strong> / <strong>V</strong> — copy / paste selection</li>
+                  <li><strong>Del</strong> / <strong>Backspace</strong> — remove selection</li>
+                  <li><strong>Ctrl/⌘ Z</strong> — undo · <strong>Ctrl/⌘ ⇧ Z</strong> — redo</li>
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -673,7 +696,15 @@ export function DesignEditor() {
 
       {/* Split: node canvas | (3D view over cut-list) */}
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1.15fr_1fr]">
-        <div className="min-h-0 border-r border-bamboo-200">
+        <div className="relative min-h-0 border-r border-bamboo-200">
+          {nodes.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6 text-center">
+              <div className="max-w-xs text-sm text-bamboo-500">
+                Empty canvas. Use <strong>+ Add node</strong> or pick an <strong>Example</strong> to
+                begin, then drag port-to-port to connect.
+              </div>
+            </div>
+          )}
           <ReactFlow
             nodes={rfNodes}
             edges={edges}
