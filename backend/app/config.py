@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     # cloud deploy so you don't need a separate one-off seed command.
     seed_on_startup: bool = False
 
+    # Secret used to sign auth tokens (Release 2 accounts). MUST be overridden in
+    # production via the SECRET_KEY env var; the default is for local dev only.
+    secret_key: str = "dev-insecure-change-me"
+    # Bearer-token lifetime — 30 days, so a login persists comfortably.
+    token_ttl_seconds: int = 60 * 60 * 24 * 30
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

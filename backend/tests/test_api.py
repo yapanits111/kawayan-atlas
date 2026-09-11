@@ -152,6 +152,85 @@ def test_graph_rejects_malformed(client):
     assert client.post("/api/graphs", json={"data": {"foo": 1}}).status_code == 422
 
 
+# --- Accounts (Release 2) ---
+
+
+def _register(client, email, password="hunter2pass"):
+    return client.post("/api/auth/register", json={"email": email, "password": password})
+
+
+def test_register_login_and_me(client):
+    r = _register(client, "Ana@Example.com")
+    assert r.status_code == 201
+    body = r.json()
+    token = body["access_token"]
+    assert body["user"]["email"] == "ana@example.com"  # normalized to lowercase
+    assert "password" not in body["user"]
+
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "ana@example.com"
+
+    login = client.post("/api/auth/login", json={"email": "ana@example.com", "password": "hunter2pass"})
+    assert login.status_code == 200
+    assert login.json()["user"]["id"] == body["user"]["id"]
+
+
+def test_register_rejects_duplicate_and_bad_input(client):
+    _register(client, "dup@example.com")
+    assert _register(client, "dup@example.com").status_code == 409
+    assert _register(client, "not-an-email").status_code == 422  # invalid email
+    assert client.post("/api/auth/register", json={"email": "x@y.com", "password": "short"}).status_code == 422
+
+
+def test_login_wrong_password_is_401(client):
+    _register(client, "carl@example.com")
+    r = client.post("/api/auth/login", json={"email": "carl@example.com", "password": "wrongwrong"})
+    assert r.status_code == 401
+
+
+def test_me_requires_auth(client):
+    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me", headers={"Authorization": "Bearer garbage"}).status_code == 401
+
+
+def test_owned_graph_appears_in_mine_and_stays_shareable(client):
+    token = _register(client, "owner@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    graph = {"nodes": [{"id": "a", "type": "graphNode", "data": {"type": "arc", "params": {}}}], "edges": []}
+
+    created = client.post("/api/graphs", json={"data": graph, "title": "My vault"}, headers=auth)
+    assert created.status_code == 201
+    assert created.json()["title"] == "My vault"
+    gid = created.json()["id"]
+
+    mine = client.get("/api/graphs/mine", headers=auth)
+    assert mine.status_code == 200
+    assert [g["id"] for g in mine.json()] == [gid]
+    assert mine.json()[0]["title"] == "My vault"
+
+    # The saved graph is still fetchable by anyone with the link (anonymous share).
+    assert client.get(f"/api/graphs/{gid}").status_code == 200
+
+
+def test_mine_requires_auth_and_is_isolated_per_user(client):
+    assert client.get("/api/graphs/mine").status_code == 401
+
+    tok_a = _register(client, "a1@example.com").json()["access_token"]
+    tok_b = _register(client, "b1@example.com").json()["access_token"]
+    graph = {"nodes": [], "edges": []}
+    client.post("/api/graphs", json={"data": graph}, headers={"Authorization": f"Bearer {tok_a}"})
+
+    # B sees none of A's graphs.
+    assert client.get("/api/graphs/mine", headers={"Authorization": f"Bearer {tok_b}"}).json() == []
+
+
+def test_anonymous_graph_has_no_owner(client):
+    created = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}})
+    assert created.status_code == 201
+    assert created.json()["owner_id"] is None
+
+
 def test_calculator_is_gated_off(client):
     r = client.post(
         "/api/calculator/single-member",
