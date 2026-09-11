@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { api, type Species } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 import { speciesColor } from "@/lib/speciesColor";
 import {
   computeStructure,
@@ -105,7 +106,9 @@ export default function StudioPage() {
   const [bracing, setBracing] = useState<BracingType>(DEFAULTS.bracing);
   const [door, setDoor] = useState(DEFAULTS.door);
 
+  const { user } = useAuth();
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [savedToAccount, setSavedToAccount] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -219,6 +222,12 @@ export default function StudioPage() {
   }
 
   async function saveAndShare() {
+    // Signed in: name the design so it lands in the account's gallery (cancel aborts).
+    let title: string | null | undefined;
+    if (user) {
+      title = window.prompt("Name this design (saved to your account):", "Bahay kubo");
+      if (title === null) return;
+    }
     setSaving(true);
     setSaveError(false);
     setCopied(false);
@@ -238,8 +247,10 @@ export default function StudioPage() {
           bracing,
           door,
         },
+        title,
       });
       setShareUrl(`${window.location.origin}/studio?d=${design.id}`);
+      setSavedToAccount(!!user);
       // Keep the address bar in sync so a refresh preserves the saved design.
       window.history.replaceState(null, "", `/studio?d=${design.id}`);
       setLoadStatus(null);
@@ -440,6 +451,11 @@ export default function StudioPage() {
                   {copied ? "✓ Copied" : "Copy"}
                 </button>
               </div>
+              {savedToAccount && (
+                <a href="/account" className="mt-1 inline-block font-medium text-leaf-700 underline">
+                  Saved to My designs
+                </a>
+              )}
             </div>
           )}
         </aside>

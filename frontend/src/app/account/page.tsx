@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
-import { api, ApiError, type GraphSummary } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+
+// A "My designs" row unifies Design Lab graphs and Studio designs.
+type Item = { kind: "graph" | "design"; id: string; title: string | null; updated_at: string };
+const keyOf = (i: Item) => `${i.kind}:${i.id}`;
+const openHref = (i: Item) => (i.kind === "graph" ? `/design?g=${i.id}` : `/studio?d=${i.id}`);
 
 export default function AccountPage() {
   const { user, loading } = useAuth();
@@ -111,15 +116,18 @@ function AuthForm() {
 
 function MyDesigns() {
   const { user, logout } = useAuth();
-  const [graphs, setGraphs] = useState<GraphSummary[] | null>(null);
+  const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    api
-      .listMyGraphs()
-      .then((gs) => {
-        setGraphs(gs);
+    Promise.all([api.listMyGraphs(), api.listMyDesigns()])
+      .then(([graphs, designs]) => {
+        const merged: Item[] = [
+          ...graphs.map((g) => ({ kind: "graph" as const, id: g.id, title: g.title, updated_at: g.updated_at })),
+          ...designs.map((d) => ({ kind: "design" as const, id: d.id, title: d.title, updated_at: d.updated_at })),
+        ].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+        setItems(merged);
         setError(null);
       })
       .catch(() => setError("Could not load your designs. Is the backend running?"));
@@ -127,32 +135,34 @@ function MyDesigns() {
 
   useEffect(load, [load]);
 
-  async function rename(g: GraphSummary) {
-    const next = window.prompt("Rename design:", g.title ?? "Untitled design");
+  async function rename(item: Item) {
+    const next = window.prompt("Rename design:", item.title ?? "Untitled design");
     if (next === null) return;
     setError(null);
-    setBusyId(g.id);
+    setBusyKey(keyOf(item));
     try {
-      await api.updateGraph(g.id, { title: next });
+      if (item.kind === "graph") await api.updateGraph(item.id, { title: next });
+      else await api.updateDesign(item.id, { title: next });
       load();
     } catch {
       setError("Could not rename that design.");
     } finally {
-      setBusyId(null);
+      setBusyKey(null);
     }
   }
 
-  async function remove(g: GraphSummary) {
-    if (!window.confirm(`Delete “${g.title || "Untitled design"}”? This cannot be undone.`)) return;
+  async function remove(item: Item) {
+    if (!window.confirm(`Delete “${item.title || "Untitled design"}”? This cannot be undone.`)) return;
     setError(null);
-    setBusyId(g.id);
+    setBusyKey(keyOf(item));
     try {
-      await api.deleteGraph(g.id);
-      setGraphs((gs) => (gs ? gs.filter((x) => x.id !== g.id) : gs));
+      if (item.kind === "graph") await api.deleteGraph(item.id);
+      else await api.deleteDesign(item.id);
+      setItems((xs) => (xs ? xs.filter((x) => keyOf(x) !== keyOf(item)) : xs));
     } catch {
       setError("Could not delete that design.");
     } finally {
-      setBusyId(null);
+      setBusyKey(null);
     }
   }
 
@@ -185,50 +195,62 @@ function MyDesigns() {
             {error}
           </div>
         )}
-        {graphs === null ? (
+        {items === null ? (
           error ? null : <div className="text-sm text-bamboo-600">Loading…</div>
-        ) : graphs.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="rounded-lg border border-dashed border-bamboo-300 bg-bamboo-50 px-4 py-10 text-center text-sm text-bamboo-600">
-            No saved designs yet. Open the{" "}
+            No saved designs yet. Save one from the{" "}
             <Link href="/design" className="font-medium text-leaf-700 underline">
               Design Lab
             </Link>{" "}
-            and use <strong>Save &amp; share</strong> to keep one here.
+            or the{" "}
+            <Link href="/studio" className="font-medium text-leaf-700 underline">
+              Studio
+            </Link>{" "}
+            while signed in and it will appear here.
           </div>
         ) : (
           <ul className="divide-y divide-bamboo-100 rounded-lg border border-bamboo-200">
-            {graphs.map((g) => (
-              <li key={g.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-leaf-800">{g.title || "Untitled design"}</div>
-                  <div className="text-xs text-bamboo-500">
-                    Updated {new Date(g.updated_at).toLocaleDateString()}
+            {items.map((item) => {
+              const busy = busyKey === keyOf(item);
+              return (
+                <li key={keyOf(item)} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium text-leaf-800">{item.title || "Untitled design"}</span>
+                      <span className="shrink-0 rounded bg-bamboo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-bamboo-600">
+                        {item.kind === "graph" ? "Design Lab" : "Studio"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-bamboo-500">
+                      Updated {new Date(item.updated_at).toLocaleDateString()}
+                    </div>
                   </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Link
-                    href={`/design?g=${g.id}`}
-                    className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
-                  >
-                    Open
-                  </Link>
-                  <button
-                    onClick={() => rename(g)}
-                    disabled={busyId === g.id}
-                    className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100 disabled:opacity-50"
-                  >
-                    Rename
-                  </button>
-                  <button
-                    onClick={() => remove(g)}
-                    disabled={busyId === g.id}
-                    className="rounded-md border border-clay-400/50 bg-white px-3 py-1.5 text-sm font-medium text-clay-700 hover:bg-clay-400/10 disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Link
+                      href={openHref(item)}
+                      className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100"
+                    >
+                      Open
+                    </Link>
+                    <button
+                      onClick={() => rename(item)}
+                      disabled={busy}
+                      className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm font-medium text-bamboo-800 hover:bg-bamboo-100 disabled:opacity-50"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      onClick={() => remove(item)}
+                      disabled={busy}
+                      className="rounded-md border border-clay-400/50 bg-white px-3 py-1.5 text-sm font-medium text-clay-700 hover:bg-clay-400/10 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

@@ -342,6 +342,44 @@ def test_delete_account_removes_user_and_owned_graphs(client):
     assert client.delete("/api/auth/me").status_code == 401  # requires auth
 
 
+def test_owned_studio_design_gallery_rename_delete(client):
+    token = _register(client, "studio@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    created = client.post("/api/designs", json={"params": {"bays": 2}, "title": "My hut"}, headers=auth)
+    assert created.status_code == 201
+    assert created.json()["title"] == "My hut"
+    did = created.json()["id"]
+
+    mine = client.get("/api/designs/mine", headers=auth)
+    assert [d["id"] for d in mine.json()] == [did]
+
+    # rename
+    assert client.patch(f"/api/designs/{did}", json={"title": "Renamed hut"}, headers=auth).status_code == 200
+    assert client.get("/api/designs/mine", headers=auth).json()[0]["title"] == "Renamed hut"
+
+    # still shareable anonymously
+    assert client.get(f"/api/designs/{did}").status_code == 200
+
+    # delete
+    assert client.delete(f"/api/designs/{did}", headers=auth).status_code == 204
+    assert client.get(f"/api/designs/{did}").status_code == 404
+
+
+def test_studio_design_ownership_is_isolated_and_anonymous_has_no_owner(client):
+    anon = client.post("/api/designs", json={"params": {"bays": 1}})
+    assert anon.status_code == 201 and anon.json()["owner_id"] is None
+
+    tok_a = _register(client, "sd-a@example.com").json()["access_token"]
+    tok_b = _register(client, "sd-b@example.com").json()["access_token"]
+    did = client.post("/api/designs", json={"params": {"bays": 1}}, headers={"Authorization": f"Bearer {tok_a}"}).json()["id"]
+
+    b = {"Authorization": f"Bearer {tok_b}"}
+    assert client.get("/api/designs/mine", headers=b).json() == []
+    assert client.patch(f"/api/designs/{did}", json={"title": "x"}, headers=b).status_code == 404
+    assert client.delete(f"/api/designs/{did}", headers=b).status_code == 404
+    assert client.get("/api/designs/mine").status_code == 401  # requires auth
+
+
 def test_login_is_rate_limited(client):
     _register(client, "rl@example.com")
     # 10 attempts are allowed within the window; the 11th is throttled.

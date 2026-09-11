@@ -66,6 +66,16 @@ export interface Design {
   based_on_template_version: string | null;
   components: Record<string, unknown>[];
   params: Record<string, unknown>;
+  owner_id?: string | null;
+  title?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DesignSummary {
+  id: string;
+  title: string | null;
+  based_on_template_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -205,8 +215,13 @@ export const api = {
     based_on_template_id?: string;
     components?: Record<string, unknown>[];
     params?: Record<string, unknown>;
+    title?: string | null;
   }) => postJSON<Design>(`/api/designs`, body),
   getDesign: (id: string) => getJSON<Design>(`/api/designs/${id}`),
+  listMyDesigns: () => getJSON<DesignSummary[]>(`/api/designs/mine`),
+  updateDesign: (id: string, patch: { title?: string }) =>
+    patchJSON<Design>(`/api/designs/${id}`, patch),
+  deleteDesign: (id: string) => del(`/api/designs/${id}`),
   createGraph: (data: { nodes: unknown[]; edges: unknown[] }, title?: string | null) =>
     postJSON<GraphDoc>(`/api/graphs`, { data, title: title ?? null }),
   getGraph: (id: string) => getJSON<GraphDoc>(`/api/graphs/${id}`),

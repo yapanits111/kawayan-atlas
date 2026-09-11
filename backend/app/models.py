@@ -76,12 +76,18 @@ class Design(Base):
     based_on_template_version: Mapped[str | None] = mapped_column(String, nullable=True)
     components: Mapped[list] = mapped_column(JSON, default=list)
     params: Mapped[dict] = mapped_column(JSON, default=dict)  # span/load params
+    # Nullable so anonymous share links keep working; set when saved while signed in (R2).
+    owner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
 
     template: Mapped["Template | None"] = relationship()
+    owner: Mapped["User | None"] = relationship()
 
 
 class User(Base):

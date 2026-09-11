@@ -81,6 +81,13 @@ class DesignCreate(BaseModel):
     based_on_template_version: str | None = None  # ignored on input; server stamps it
     components: list[DesignComponentIn] = Field(default_factory=list, max_length=50)
     params: DesignParams = Field(default_factory=DesignParams)
+    title: str | None = Field(default=None, max_length=120)
+
+
+class DesignUpdate(BaseModel):
+    """Rename an owned Studio design (parity with graphs)."""
+
+    title: str | None = Field(default=None, max_length=120)
 
 
 class DesignOut(BaseModel):
@@ -91,6 +98,20 @@ class DesignOut(BaseModel):
     based_on_template_version: str | None
     components: list[dict]
     params: dict
+    owner_id: str | None = None
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DesignSummary(BaseModel):
+    """A lightweight row for the "My designs" gallery (Studio side)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str | None = None
+    based_on_template_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
