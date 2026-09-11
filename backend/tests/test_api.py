@@ -275,6 +275,53 @@ def test_edit_and_delete_require_auth(client):
     assert client.delete(f"/api/graphs/{gid}").status_code == 401
 
 
+def test_change_password(client):
+    token = _register(client, "changer@example.com", "oldpassword1").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    # wrong current password is rejected
+    bad = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "nope", "new_password": "newpassword2"},
+        headers=auth,
+    )
+    assert bad.status_code == 400
+
+    ok = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "oldpassword1", "new_password": "newpassword2"},
+        headers=auth,
+    )
+    assert ok.status_code == 204
+
+    # old password no longer works; new one does
+    assert client.post("/api/auth/login", json={"email": "changer@example.com", "password": "oldpassword1"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "changer@example.com", "password": "newpassword2"}).status_code == 200
+
+
+def test_change_password_rejects_short_new_and_requires_auth(client):
+    token = _register(client, "changer2@example.com").json()["access_token"]
+    short = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "hunter2pass", "new_password": "short"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert short.status_code == 422
+    assert client.post("/api/auth/change-password", json={"current_password": "a", "new_password": "abcdefgh"}).status_code == 401
+
+
+def test_delete_account_removes_user_and_owned_graphs(client):
+    token = _register(client, "goodbye@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}, "title": "temp"}, headers=auth).json()["id"]
+
+    assert client.delete("/api/auth/me", headers=auth).status_code == 204
+    # the account is gone (login fails) and its owned graph was removed
+    assert client.post("/api/auth/login", json={"email": "goodbye@example.com", "password": "hunter2pass"}).status_code == 401
+    assert client.get(f"/api/graphs/{gid}").status_code == 404
+    assert client.delete("/api/auth/me").status_code == 401  # requires auth
+
+
 def test_calculator_is_gated_off(client):
     r = client.post(
         "/api/calculator/single-member",

@@ -1,12 +1,12 @@
-"""Accounts: register, login, and the current-user dependencies (Release 2)."""
+"""Accounts: register, login, settings, and the current-user dependencies (Release 2)."""
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User
-from ..schemas import LoginIn, RegisterIn, TokenOut, UserOut
+from ..models import Graph, User
+from ..schemas import ChangePasswordIn, LoginIn, RegisterIn, TokenOut, UserOut
 from ..security import create_token, hash_password, verify_password, verify_token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -71,3 +71,25 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    payload: ChangePasswordIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Your current password is incorrect")
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/me", status_code=204)
+def delete_account(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Delete the account and everything it owns. Anonymous graphs are left untouched."""
+    db.query(Graph).filter(Graph.owner_id == user.id).delete(synchronize_session=False)
+    db.delete(user)
+    db.commit()
+    return Response(status_code=204)

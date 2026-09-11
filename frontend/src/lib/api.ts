@@ -171,12 +171,18 @@ async function sendJSON<T>(method: "POST" | "PATCH", path: string, body: unknown
 const postJSON = <T>(path: string, body: unknown) => sendJSON<T>("POST", path, body);
 const patchJSON = <T>(path: string, body: unknown) => sendJSON<T>("PATCH", path, body);
 
-async function del(path: string): Promise<void> {
-  const res = await fetch(`${API_BASE}${path}`, { method: "DELETE", headers: authHeaders() });
+/** For endpoints that return 204 No Content (delete, change-password). */
+async function sendNoBody(method: "POST" | "DELETE", path: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...authHeaders() },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   if (!res.ok) {
     throw new ApiError(res.status, await errorMessage(res, path));
   }
 }
+const del = (path: string) => sendNoBody("DELETE", path);
 
 export const api = {
   listSpecies: (params?: { region?: string; role?: string; q?: string }) => {
@@ -213,6 +219,9 @@ export const api = {
   login: (email: string, password: string) =>
     postJSON<TokenResponse>(`/api/auth/login`, { email, password }),
   me: () => getJSON<AuthUser>(`/api/auth/me`),
+  changePassword: (current_password: string, new_password: string) =>
+    sendNoBody("POST", `/api/auth/change-password`, { current_password, new_password }),
+  deleteAccount: () => sendNoBody("DELETE", `/api/auth/me`),
   listMyGraphs: () => getJSON<GraphSummary[]>(`/api/graphs/mine`),
   calculateSingleMember: (body: {
     species_id: string;

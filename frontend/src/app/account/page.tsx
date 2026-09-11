@@ -232,6 +232,100 @@ function MyDesigns() {
           </ul>
         )}
       </div>
+
+      <AccountSettings />
     </div>
+  );
+}
+
+function AccountSettings() {
+  const { logout } = useAuth();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setBusy(true);
+    try {
+      await api.changePassword(current, next);
+      setCurrent("");
+      setNext("");
+      setMsg({ kind: "ok", text: "Password updated." });
+    } catch (err) {
+      setMsg({ kind: "err", text: err instanceof ApiError ? err.message : "Could not change your password." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (
+      !window.confirm(
+        "Delete your account? Your saved designs will be permanently removed. This cannot be undone.",
+      )
+    )
+      return;
+    try {
+      await api.deleteAccount();
+      logout(); // drops the (now invalid) token and returns to the logged-out view
+    } catch {
+      setMsg({ kind: "err", text: "Could not delete your account." });
+    }
+  }
+
+  return (
+    <section className="mt-12 border-t border-bamboo-200 pt-8">
+      <h2 className="font-display text-lg font-semibold text-leaf-800">Account settings</h2>
+
+      <form onSubmit={changePassword} className="mt-4 max-w-sm space-y-3">
+        <div className="text-sm font-medium text-bamboo-800">Change password</div>
+        <input
+          type="password"
+          required
+          autoComplete="current-password"
+          placeholder="Current password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          className="w-full rounded-md border border-bamboo-300 px-3 py-2 text-sm outline-none focus:border-leaf-500"
+        />
+        <input
+          type="password"
+          required
+          minLength={8}
+          autoComplete="new-password"
+          placeholder="New password (min 8 characters)"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          className="w-full rounded-md border border-bamboo-300 px-3 py-2 text-sm outline-none focus:border-leaf-500"
+        />
+        {msg && (
+          <div className={`text-sm ${msg.kind === "ok" ? "text-leaf-700" : "text-clay-700"}`}>{msg.text}</div>
+        )}
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-md bg-leaf-600 px-4 py-2 text-sm font-semibold text-white hover:bg-leaf-700 disabled:opacity-60"
+        >
+          {busy ? "Updating…" : "Update password"}
+        </button>
+      </form>
+
+      <div className="mt-8 max-w-sm rounded-lg border border-clay-400/40 bg-clay-400/5 p-4">
+        <div className="text-sm font-semibold text-clay-700">Danger zone</div>
+        <p className="mt-1 text-xs text-bamboo-600">
+          Permanently delete your account and all designs saved to it. Anonymous share links you
+          created stay available.
+        </p>
+        <button
+          onClick={deleteAccount}
+          className="mt-3 rounded-md border border-clay-400/60 bg-white px-4 py-2 text-sm font-semibold text-clay-700 hover:bg-clay-400/10"
+        >
+          Delete account
+        </button>
+      </div>
+    </section>
   );
 }
