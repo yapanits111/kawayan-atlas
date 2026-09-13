@@ -13,6 +13,22 @@ from .auth import get_current_user, get_optional_user
 router = APIRouter(prefix="/api/designs", tags=["designs"])
 
 
+def _design_out(design: Design, user: User | None) -> DesignOut:
+    """Serialise a design for the requester — ownership as a boolean, never the owner's id
+    (designs are readable by anyone holding the share link)."""
+    return DesignOut(
+        id=design.id,
+        based_on_template_id=design.based_on_template_id,
+        based_on_template_version=design.based_on_template_version,
+        components=design.components,
+        params=design.params,
+        title=design.title,
+        owned_by_me=bool(user is not None and design.owner_id == user.id),
+        created_at=design.created_at,
+        updated_at=design.updated_at,
+    )
+
+
 def _owned_or_404(design_id: str, db: Session, user: User) -> Design:
     """Fetch a design the user owns, or 404 — a not-owned design reads as not-found."""
     design = db.get(Design, design_id)
@@ -46,7 +62,7 @@ def create_design(
     db.add(design)
     db.commit()
     db.refresh(design)
-    return design
+    return _design_out(design, user)
 
 
 @router.get("/mine", response_model=list[DesignSummary])
@@ -60,11 +76,15 @@ def my_designs(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 
 @router.get("/{design_id}", response_model=DesignOut)
-def get_design(design_id: str, db: Session = Depends(get_db)):
+def get_design(
+    design_id: str,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     design = db.get(Design, design_id)
     if design is None:
         raise HTTPException(status_code=404, detail="Design not found")
-    return design
+    return _design_out(design, user)
 
 
 @router.patch("/{design_id}", response_model=DesignOut)
@@ -79,7 +99,7 @@ def update_design(
         design.title = payload.title.strip() or None
     db.commit()
     db.refresh(design)
-    return design
+    return _design_out(design, user)
 
 
 @router.delete("/{design_id}", status_code=204)

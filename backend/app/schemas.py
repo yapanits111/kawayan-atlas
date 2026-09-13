@@ -98,7 +98,8 @@ class DesignOut(BaseModel):
     based_on_template_version: str | None
     components: list[dict]
     params: dict
-    owner_id: str | None = None
+    # As with graphs: never expose the owner's user id on a publicly-readable design.
+    owned_by_me: bool = False
     title: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -129,7 +130,9 @@ class GraphOut(BaseModel):
 
     id: str
     data: dict
-    owner_id: str | None = None
+    # Whether the *requesting* user owns this graph. We deliberately do not expose the
+    # owner's user id: graphs are readable by anyone holding the share link.
+    owned_by_me: bool = False
     title: str | None = None
     created_at: datetime
     updated_at: datetime

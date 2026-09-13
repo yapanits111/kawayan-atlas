@@ -66,7 +66,7 @@ export interface Design {
   based_on_template_version: string | null;
   components: Record<string, unknown>[];
   params: Record<string, unknown>;
-  owner_id?: string | null;
+  owned_by_me?: boolean;
   title?: string | null;
   created_at: string;
   updated_at: string;
@@ -93,7 +93,8 @@ export class ApiError extends Error {
 export interface GraphDoc {
   id: string;
   data: { nodes: unknown[]; edges: unknown[] };
-  owner_id?: string | null;
+  /** Whether the signed-in requester owns this graph (the server never sends the owner id). */
+  owned_by_me?: boolean;
   title?: string | null;
   created_at: string;
   updated_at: string;

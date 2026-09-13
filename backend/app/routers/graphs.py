@@ -25,6 +25,19 @@ def _validate_graph_data(data: dict) -> None:
         raise HTTPException(status_code=422, detail="graph too large")
 
 
+def _graph_out(graph: Graph, user: User | None) -> GraphOut:
+    """Serialise a graph for the requester — ownership is reported as a boolean so the
+    owner's user id never leaks through a public share link."""
+    return GraphOut(
+        id=graph.id,
+        data=graph.data,
+        title=graph.title,
+        owned_by_me=bool(user is not None and graph.owner_id == user.id),
+        created_at=graph.created_at,
+        updated_at=graph.updated_at,
+    )
+
+
 def _owned_or_404(graph_id: str, db: Session, user: User) -> Graph:
     """Fetch a graph the user owns, or 404. Not-owned reads as not-found so a user can
     never probe or touch someone else's (or an anonymous) graph."""
@@ -53,7 +66,7 @@ def create_graph(
     db.add(graph)
     db.commit()
     db.refresh(graph)
-    return graph
+    return _graph_out(graph, user)
 
 
 @router.get("/mine", response_model=list[GraphSummary])
@@ -67,11 +80,15 @@ def my_graphs(db: Session = Depends(get_db), user: User = Depends(get_current_us
 
 
 @router.get("/{graph_id}", response_model=GraphOut)
-def get_graph(graph_id: str, db: Session = Depends(get_db)):
+def get_graph(
+    graph_id: str,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     graph = db.get(Graph, graph_id)
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
-    return graph
+    return _graph_out(graph, user)
 
 
 @router.patch("/{graph_id}", response_model=GraphOut)
@@ -90,7 +107,7 @@ def update_graph(
         graph.title = payload.title.strip() or None
     db.commit()
     db.refresh(graph)
-    return graph
+    return _graph_out(graph, user)
 
 
 @router.delete("/{graph_id}", status_code=204)

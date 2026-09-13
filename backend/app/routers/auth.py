@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Graph, User
+from ..models import Design, Graph, User
 from ..ratelimit import check as rate_check
 from ..schemas import ChangePasswordIn, LoginIn, RegisterIn, TokenOut, UserOut
 from ..security import create_token, hash_password, verify_password, verify_token
@@ -112,8 +112,11 @@ def logout_all(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 @router.delete("/me", status_code=204)
 def delete_account(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Delete the account and everything it owns. Anonymous graphs are left untouched."""
+    """Delete the account and everything it owns — Design Lab graphs *and* Studio designs.
+    Both carry a FK to users.id, so they must go first. Anonymous (ownerless) graphs and
+    designs are left untouched, so shared links created before signing up keep working."""
     db.query(Graph).filter(Graph.owner_id == user.id).delete(synchronize_session=False)
+    db.query(Design).filter(Design.owner_id == user.id).delete(synchronize_session=False)
     db.delete(user)
     db.commit()
     return Response(status_code=204)

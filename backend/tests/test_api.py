@@ -1,4 +1,24 @@
 """API tests for the Kawayan Atlas backend."""
+import pytest
+
+
+def test_deployment_refuses_the_default_signing_key(monkeypatch):
+    """Tokens are stateless HMACs, so shipping with the published default key would let
+    anyone forge a session. A deployment must fail closed."""
+    from app import config
+
+    monkeypatch.setattr(config.settings, "secret_key", config.INSECURE_DEFAULT_SECRET)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        config.assert_secret_key_is_safe()
+
+
+def test_configured_signing_key_is_accepted_in_a_deployment(monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config.settings, "secret_key", "a-long-random-production-secret")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    config.assert_secret_key_is_safe()  # must not raise
 
 
 def test_health(client):
@@ -225,10 +245,22 @@ def test_mine_requires_auth_and_is_isolated_per_user(client):
     assert client.get("/api/graphs/mine", headers={"Authorization": f"Bearer {tok_b}"}).json() == []
 
 
-def test_anonymous_graph_has_no_owner(client):
-    created = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}})
-    assert created.status_code == 201
-    assert created.json()["owner_id"] is None
+def test_public_graph_read_never_exposes_the_owner_id(client):
+    token = _register(client, "privacy@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}}, headers=auth).json()["id"]
+
+    # Anonymous read of a share link: no owner id, and not flagged as mine.
+    anon = client.get(f"/api/graphs/{gid}")
+    assert anon.status_code == 200
+    assert "owner_id" not in anon.json()
+    assert anon.json()["owned_by_me"] is False
+
+    # The owner sees it as theirs.
+    assert client.get(f"/api/graphs/{gid}", headers=auth).json()["owned_by_me"] is True
+
+    # A plain anonymous save is owned by nobody.
+    assert client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}}).json()["owned_by_me"] is False
 
 
 def test_owner_can_rename_update_and_delete(client):
@@ -330,12 +362,18 @@ def test_change_password_rejects_short_new_and_requires_auth(client):
     assert client.post("/api/auth/change-password", json={"current_password": "a", "new_password": "abcdefgh"}).status_code == 401
 
 
-def test_delete_account_removes_user_and_owned_graphs(client):
+def test_delete_account_removes_user_and_everything_owned(client):
     token = _register(client, "goodbye@example.com").json()["access_token"]
     auth = {"Authorization": f"Bearer {token}"}
     gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}, "title": "temp"}, headers=auth).json()["id"]
+    # A Studio design too: it also FKs to users.id, so deletion must clear both.
+    did = client.post("/api/designs", json={"params": {"bays": 1}, "title": "temp hut"}, headers=auth).json()["id"]
+    # An anonymous design must survive the account deletion.
+    anon_did = client.post("/api/designs", json={"params": {"bays": 1}}).json()["id"]
 
     assert client.delete("/api/auth/me", headers=auth).status_code == 204
+    assert client.get(f"/api/designs/{did}").status_code == 404
+    assert client.get(f"/api/designs/{anon_did}").status_code == 200
     # the account is gone (login fails) and its owned graph was removed
     assert client.post("/api/auth/login", json={"email": "goodbye@example.com", "password": "hunter2pass"}).status_code == 401
     assert client.get(f"/api/graphs/{gid}").status_code == 404
@@ -367,7 +405,8 @@ def test_owned_studio_design_gallery_rename_delete(client):
 
 def test_studio_design_ownership_is_isolated_and_anonymous_has_no_owner(client):
     anon = client.post("/api/designs", json={"params": {"bays": 1}})
-    assert anon.status_code == 201 and anon.json()["owner_id"] is None
+    assert anon.status_code == 201 and anon.json()["owned_by_me"] is False
+    assert "owner_id" not in anon.json()
 
     tok_a = _register(client, "sd-a@example.com").json()["access_token"]
     tok_b = _register(client, "sd-b@example.com").json()["access_token"]

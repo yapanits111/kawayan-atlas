@@ -103,9 +103,10 @@ export function DesignEditor() {
   // The currently-loaded saved graph (from a share/gallery link or a prior save this
   // session). If the signed-in user owns it, Save updates it in place instead of
   // creating a duplicate.
-  const [loadedGraph, setLoadedGraph] = useState<{ id: string; ownerId: string | null; title: string | null } | null>(null);
+  const [loadedGraph, setLoadedGraph] = useState<{ id: string; ownedByMe: boolean; title: string | null } | null>(null);
   const { user } = useAuth();
-  const ownsLoaded = !!user && !!loadedGraph && loadedGraph.ownerId === user.id;
+  // Ownership is decided server-side (the API returns a boolean, never the owner's id).
+  const ownsLoaded = !!user && !!loadedGraph && loadedGraph.ownedByMe;
   // Signed in, looking at a shared design that isn't yours — Save claims a copy.
   const viewingOthers = !!user && !!loadedGraph && !ownsLoaded;
   const restored = useRef(false);
@@ -172,7 +173,7 @@ export function DesignEditor() {
         .getGraph(gid)
         .then((doc) => {
           applyGraph(doc.data);
-          setLoadedGraph({ id: doc.id, ownerId: doc.owner_id ?? null, title: doc.title ?? null });
+          setLoadedGraph({ id: doc.id, ownedByMe: !!doc.owned_by_me, title: doc.title ?? null });
         })
         .catch(() => {});
       return;
@@ -407,7 +408,7 @@ export function DesignEditor() {
         const title = window.prompt("Name this design (saved to your account):", suggested);
         if (title === null) return; // cancelled
         const doc = await api.createGraph(data, title);
-        setLoadedGraph({ id: doc.id, ownerId: user.id, title: title.trim() || null });
+        setLoadedGraph({ id: doc.id, ownedByMe: true, title: title.trim() || null });
         showSaved(doc.id);
       } else {
         const doc = await api.createGraph(data);
