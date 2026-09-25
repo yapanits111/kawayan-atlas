@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/icons";
 
 export default function NotFound() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-24 text-center">
-      <div className="text-6xl" aria-hidden>🎋</div>
+      <BrandMark className="mx-auto h-16 w-16" />
       <h1 className="mt-6 font-display text-3xl font-bold text-leaf-900">
         Page not found
       </h1>

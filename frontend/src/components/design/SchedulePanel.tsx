@@ -106,7 +106,7 @@ export function scheduleHTML(schedule: Schedule): string {
       .note{margin-top:14px;padding:8px 10px;border-left:3px solid #a9623a;background:#faf6ee;font-size:11px;color:#635130}
       .foot{margin-top:20px;font-size:10px;color:#8a7a5a}
     </style></head><body>
-    <h1>🎋 Kawayan Atlas — Fabrication cut-list</h1>
+    <h1>Kawayan Atlas — Fabrication cut-list</h1>
     <div class="totals">${schedule.totals.count} elements · ${schedule.totals.totalLength_m} m total${schedule.totals.jointCount > 0 ? ` · ${schedule.totals.jointCount} joints` : ""}${schedule.totals.estCulms > 0 ? ` · ~${schedule.totals.estCulms} culms` : ""}</div>
     ${hasNamedSpecies(schedule) ? `<h2>Material by species</h2>
     <table><thead><tr><th>Species</th><th>Culms</th><th>Total length</th></tr></thead>
