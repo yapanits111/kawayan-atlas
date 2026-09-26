@@ -61,23 +61,36 @@ function toCSV(schedule: Schedule): string {
   return lines.join("\n");
 }
 
-function scheduleHTML(schedule: Schedule): string {
+/** Escape a value for interpolation into the printable HTML document below.
+ *  Schedule text is derived from node parameters (species/joint labels, layups), which come
+ *  from the saved graph — i.e. it is attacker-controlled on a shared design. The print
+ *  document is written into a same-origin iframe, so unescaped values would execute there. */
+function esc(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function scheduleHTML(schedule: Schedule): string {
   const engineered = schedule.rows.some((r) => r.verification === "outside-iso22156");
   const bom = schedule.groups
     .map(
       (g) =>
-        `<tr><td>${g.count}×</td><td>${g.kind}</td><td>${g.length_m} m</td>` +
-        `<td>${g.detail}${g.layup ? `<br><span class="sub">${g.layup}</span>` : ""}</td>` +
-        `<td>${g.totalLength_m} m</td></tr>`,
+        `<tr><td>${esc(g.count)}×</td><td>${esc(g.kind)}</td><td>${esc(g.length_m)} m</td>` +
+        `<td>${esc(g.detail)}${g.layup ? `<br><span class="sub">${esc(g.layup)}</span>` : ""}</td>` +
+        `<td>${esc(g.totalLength_m)} m</td></tr>`,
     )
     .join("");
   const rows = schedule.rows
     .map(
       (r) =>
-        `<tr><td>${r.id}</td><td>${r.kind}</td><td>${r.length_m} m</td>` +
-        `<td>${r.detail}${r.layup ? `<br><span class="sub">${r.layup}</span>` : ""}</td>` +
-        `<td>${r.nodes ?? ""}</td>` +
-        `<td>${r.cut_start_deg ?? ""}</td><td>${r.cut_end_deg ?? ""}</td></tr>`,
+        `<tr><td>${esc(r.id)}</td><td>${esc(r.kind)}</td><td>${esc(r.length_m)} m</td>` +
+        `<td>${esc(r.detail)}${r.layup ? `<br><span class="sub">${esc(r.layup)}</span>` : ""}</td>` +
+        `<td>${esc(r.nodes ?? "")}</td>` +
+        `<td>${esc(r.cut_start_deg ?? "")}</td><td>${esc(r.cut_end_deg ?? "")}</td></tr>`,
     )
     .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>Kawayan Atlas — Cut-list</title>
@@ -93,12 +106,12 @@ function scheduleHTML(schedule: Schedule): string {
       .note{margin-top:14px;padding:8px 10px;border-left:3px solid #a9623a;background:#faf6ee;font-size:11px;color:#635130}
       .foot{margin-top:20px;font-size:10px;color:#8a7a5a}
     </style></head><body>
-    <h1>🎋 Kawayan Atlas — Fabrication cut-list</h1>
+    <h1>Kawayan Atlas — Fabrication cut-list</h1>
     <div class="totals">${schedule.totals.count} elements · ${schedule.totals.totalLength_m} m total${schedule.totals.jointCount > 0 ? ` · ${schedule.totals.jointCount} joints` : ""}${schedule.totals.estCulms > 0 ? ` · ~${schedule.totals.estCulms} culms` : ""}</div>
     ${hasNamedSpecies(schedule) ? `<h2>Material by species</h2>
     <table><thead><tr><th>Species</th><th>Culms</th><th>Total length</th></tr></thead>
     <tbody>${schedule.species
-      .map((g) => `<tr><td>${g.species}</td><td>${g.count}</td><td>${g.totalLength_m} m</td></tr>`)
+      .map((g) => `<tr><td>${esc(g.species)}</td><td>${esc(g.count)}</td><td>${esc(g.totalLength_m)} m</td></tr>`)
       .join("")}</tbody></table>` : ""}
     ${bom ? `<h2>Bill of materials</h2>
     <table><thead><tr><th>Qty</th><th>Kind</th><th>Length</th><th>Detail</th><th>Total</th></tr></thead>
@@ -111,8 +124,8 @@ function scheduleHTML(schedule: Schedule): string {
     <tbody>${schedule.joints
       .map(
         (j) =>
-          `<tr><td>${j.id}</td><td>${j.type}</td><td>${j.members}</td><td>${j.memberIds}</td>` +
-          `<td>${j.angle_deg != null ? `${j.angle_deg}°` : ""}</td><td>${j.x}, ${j.y}, ${j.z} m</td></tr>`,
+          `<tr><td>${esc(j.id)}</td><td>${esc(j.type)}</td><td>${esc(j.members)}</td><td>${esc(j.memberIds)}</td>` +
+          `<td>${j.angle_deg != null ? `${esc(j.angle_deg)}°` : ""}</td><td>${esc(j.x)}, ${esc(j.y)}, ${esc(j.z)} m</td></tr>`,
       )
       .join("")}</tbody></table>` : ""}
     ${engineered ? `<div class="note"><strong>Validation status.</strong> This schedule contains processed or engineered bamboo (strips, splits, laminates). ISO 22156:2021 covers <em>round culms</em> and explicitly excludes glue-laminated, cross-laminated, oriented-strand, and densified bamboo — those elements have no settled international code path, and their structural validation rests on manufacturer data and project-specific engineering.</div>` : ""}

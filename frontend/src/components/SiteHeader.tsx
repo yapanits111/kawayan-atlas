@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { BrandMark } from "@/components/icons";
 
 const nav = [
   { href: "/atlas", label: "Atlas" },
@@ -24,10 +25,14 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-bamboo-200 bg-bamboo-50/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
-        <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <span className="text-2xl" aria-hidden>🎋</span>
-          <span className="font-display text-xl font-semibold text-leaf-800">
-            Kawayan Atlas
+        <Link
+          href="/"
+          className="flex items-center gap-2.5"
+          onClick={() => setOpen(false)}
+        >
+          <BrandMark className="h-8 w-8" />
+          <span className="font-display text-xl font-semibold tracking-tight text-leaf-800">
+            Kawayan <span className="text-bamboo-600">Atlas</span>
           </span>
         </Link>
 

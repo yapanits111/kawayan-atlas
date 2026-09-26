@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type Species, type CalcResult } from "@/lib/api";
+import { IconLock } from "@/components/icons";
 
 export default function CalculatorPage() {
   const [species, setSpecies] = useState<Species[]>([]);
@@ -95,8 +96,9 @@ export default function CalculatorPage() {
 
       {result && !result.enabled && (
         <div className="mt-6 rounded-xl border border-bamboo-300 bg-bamboo-100 p-6">
-          <h2 className="font-display text-lg font-semibold text-bamboo-800">
-            🔒 Calculator under engineer review
+          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-bamboo-800">
+            <IconLock className="h-5 w-5 text-clay-600" />
+            Calculator under engineer review
           </h2>
           <p className="mt-2 text-sm text-bamboo-800">
             The numeric rules are intentionally disabled until a licensed structural

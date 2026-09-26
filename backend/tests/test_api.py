@@ -1,4 +1,24 @@
 """API tests for the Kawayan Atlas backend."""
+import pytest
+
+
+def test_deployment_refuses_the_default_signing_key(monkeypatch):
+    """Tokens are stateless HMACs, so shipping with the published default key would let
+    anyone forge a session. A deployment must fail closed."""
+    from app import config
+
+    monkeypatch.setattr(config.settings, "secret_key", config.INSECURE_DEFAULT_SECRET)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        config.assert_secret_key_is_safe()
+
+
+def test_configured_signing_key_is_accepted_in_a_deployment(monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config.settings, "secret_key", "a-long-random-production-secret")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    config.assert_secret_key_is_safe()  # must not raise
 
 
 def test_health(client):
@@ -225,10 +245,187 @@ def test_mine_requires_auth_and_is_isolated_per_user(client):
     assert client.get("/api/graphs/mine", headers={"Authorization": f"Bearer {tok_b}"}).json() == []
 
 
-def test_anonymous_graph_has_no_owner(client):
-    created = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}})
+def test_public_graph_read_never_exposes_the_owner_id(client):
+    token = _register(client, "privacy@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}}, headers=auth).json()["id"]
+
+    # Anonymous read of a share link: no owner id, and not flagged as mine.
+    anon = client.get(f"/api/graphs/{gid}")
+    assert anon.status_code == 200
+    assert "owner_id" not in anon.json()
+    assert anon.json()["owned_by_me"] is False
+
+    # The owner sees it as theirs.
+    assert client.get(f"/api/graphs/{gid}", headers=auth).json()["owned_by_me"] is True
+
+    # A plain anonymous save is owned by nobody.
+    assert client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}}).json()["owned_by_me"] is False
+
+
+def test_owner_can_rename_update_and_delete(client):
+    token = _register(client, "editor@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    gid = client.post(
+        "/api/graphs", json={"data": {"nodes": [], "edges": []}, "title": "First"}, headers=auth
+    ).json()["id"]
+
+    # rename
+    r = client.patch(f"/api/graphs/{gid}", json={"title": "Renamed"}, headers=auth)
+    assert r.status_code == 200 and r.json()["title"] == "Renamed"
+
+    # update-in-place (data changes, same id)
+    newdata = {"nodes": [{"id": "n1", "type": "graphNode", "data": {"type": "arc", "params": {}}}], "edges": []}
+    r = client.patch(f"/api/graphs/{gid}", json={"data": newdata}, headers=auth)
+    assert r.status_code == 200
+    assert client.get(f"/api/graphs/{gid}").json()["data"]["nodes"][0]["id"] == "n1"
+
+    # delete
+    assert client.delete(f"/api/graphs/{gid}", headers=auth).status_code == 204
+    assert client.get(f"/api/graphs/{gid}").status_code == 404
+    assert client.get("/api/graphs/mine", headers=auth).json() == []
+
+
+def test_cannot_edit_or_delete_someone_elses_graph(client):
+    tok_a = _register(client, "own-a@example.com").json()["access_token"]
+    tok_b = _register(client, "own-b@example.com").json()["access_token"]
+    gid = client.post(
+        "/api/graphs", json={"data": {"nodes": [], "edges": []}}, headers={"Authorization": f"Bearer {tok_a}"}
+    ).json()["id"]
+
+    # B cannot see, rename, or delete A's graph — all read as 404 (no probing).
+    b = {"Authorization": f"Bearer {tok_b}"}
+    assert client.patch(f"/api/graphs/{gid}", json={"title": "hijack"}, headers=b).status_code == 404
+    assert client.delete(f"/api/graphs/{gid}", headers=b).status_code == 404
+    # ...and the graph is untouched.
+    assert client.get(f"/api/graphs/{gid}").status_code == 200
+
+
+def test_edit_and_delete_require_auth(client):
+    gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}}).json()["id"]
+    assert client.patch(f"/api/graphs/{gid}", json={"title": "x"}).status_code == 401
+    assert client.delete(f"/api/graphs/{gid}").status_code == 401
+
+
+def test_change_password(client):
+    token = _register(client, "changer@example.com", "oldpassword1").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    # wrong current password is rejected
+    bad = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "nope", "new_password": "newpassword2"},
+        headers=auth,
+    )
+    assert bad.status_code == 400
+
+    ok = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "oldpassword1", "new_password": "newpassword2"},
+        headers=auth,
+    )
+    assert ok.status_code == 200
+    new_token = ok.json()["access_token"]
+
+    # the old token is revoked (version bumped); the freshly-issued one works
+    assert client.get("/api/auth/me", headers=auth).status_code == 401
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {new_token}"}).status_code == 200
+
+    # old password no longer works; new one does
+    assert client.post("/api/auth/login", json={"email": "changer@example.com", "password": "oldpassword1"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "changer@example.com", "password": "newpassword2"}).status_code == 200
+
+
+def test_logout_all_revokes_every_token(client):
+    token = _register(client, "revoke@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/auth/me", headers=auth).status_code == 200
+
+    assert client.post("/api/auth/logout-all", headers=auth).status_code == 204
+    # the caller's own token is now revoked too
+    assert client.get("/api/auth/me", headers=auth).status_code == 401
+    assert client.post("/api/auth/logout-all").status_code == 401  # requires auth
+
+    # logging in again mints a fresh, valid token
+    fresh = client.post("/api/auth/login", json={"email": "revoke@example.com", "password": "hunter2pass"}).json()["access_token"]
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200
+
+
+def test_change_password_rejects_short_new_and_requires_auth(client):
+    token = _register(client, "changer2@example.com").json()["access_token"]
+    short = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "hunter2pass", "new_password": "short"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert short.status_code == 422
+    assert client.post("/api/auth/change-password", json={"current_password": "a", "new_password": "abcdefgh"}).status_code == 401
+
+
+def test_delete_account_removes_user_and_everything_owned(client):
+    token = _register(client, "goodbye@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    gid = client.post("/api/graphs", json={"data": {"nodes": [], "edges": []}, "title": "temp"}, headers=auth).json()["id"]
+    # A Studio design too: it also FKs to users.id, so deletion must clear both.
+    did = client.post("/api/designs", json={"params": {"bays": 1}, "title": "temp hut"}, headers=auth).json()["id"]
+    # An anonymous design must survive the account deletion.
+    anon_did = client.post("/api/designs", json={"params": {"bays": 1}}).json()["id"]
+
+    assert client.delete("/api/auth/me", headers=auth).status_code == 204
+    assert client.get(f"/api/designs/{did}").status_code == 404
+    assert client.get(f"/api/designs/{anon_did}").status_code == 200
+    # the account is gone (login fails) and its owned graph was removed
+    assert client.post("/api/auth/login", json={"email": "goodbye@example.com", "password": "hunter2pass"}).status_code == 401
+    assert client.get(f"/api/graphs/{gid}").status_code == 404
+    assert client.delete("/api/auth/me").status_code == 401  # requires auth
+
+
+def test_owned_studio_design_gallery_rename_delete(client):
+    token = _register(client, "studio@example.com").json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    created = client.post("/api/designs", json={"params": {"bays": 2}, "title": "My hut"}, headers=auth)
     assert created.status_code == 201
-    assert created.json()["owner_id"] is None
+    assert created.json()["title"] == "My hut"
+    did = created.json()["id"]
+
+    mine = client.get("/api/designs/mine", headers=auth)
+    assert [d["id"] for d in mine.json()] == [did]
+
+    # rename
+    assert client.patch(f"/api/designs/{did}", json={"title": "Renamed hut"}, headers=auth).status_code == 200
+    assert client.get("/api/designs/mine", headers=auth).json()[0]["title"] == "Renamed hut"
+
+    # still shareable anonymously
+    assert client.get(f"/api/designs/{did}").status_code == 200
+
+    # delete
+    assert client.delete(f"/api/designs/{did}", headers=auth).status_code == 204
+    assert client.get(f"/api/designs/{did}").status_code == 404
+
+
+def test_studio_design_ownership_is_isolated_and_anonymous_has_no_owner(client):
+    anon = client.post("/api/designs", json={"params": {"bays": 1}})
+    assert anon.status_code == 201 and anon.json()["owned_by_me"] is False
+    assert "owner_id" not in anon.json()
+
+    tok_a = _register(client, "sd-a@example.com").json()["access_token"]
+    tok_b = _register(client, "sd-b@example.com").json()["access_token"]
+    did = client.post("/api/designs", json={"params": {"bays": 1}}, headers={"Authorization": f"Bearer {tok_a}"}).json()["id"]
+
+    b = {"Authorization": f"Bearer {tok_b}"}
+    assert client.get("/api/designs/mine", headers=b).json() == []
+    assert client.patch(f"/api/designs/{did}", json={"title": "x"}, headers=b).status_code == 404
+    assert client.delete(f"/api/designs/{did}", headers=b).status_code == 404
+    assert client.get("/api/designs/mine").status_code == 401  # requires auth
+
+
+def test_login_is_rate_limited(client):
+    _register(client, "rl@example.com")
+    # 10 attempts are allowed within the window; the 11th is throttled.
+    for _ in range(10):
+        client.post("/api/auth/login", json={"email": "rl@example.com", "password": "wrongpass"})
+    r = client.post("/api/auth/login", json={"email": "rl@example.com", "password": "wrongpass"})
+    assert r.status_code == 429
 
 
 def test_calculator_is_gated_off(client):

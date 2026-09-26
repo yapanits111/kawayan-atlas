@@ -27,6 +27,16 @@ def _prepare_db():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    # Auth rate limits are keyed by client IP; the TestClient shares one, so clear the
+    # counters between tests to keep them independent.
+    from app.ratelimit import reset
+
+    reset()
+    yield
+
+
 @pytest.fixture()
 def client() -> TestClient:
     return TestClient(app)

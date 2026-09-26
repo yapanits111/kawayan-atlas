@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { api, type Template } from "@/lib/api";
 import { ApiUnavailable } from "@/components/ApiUnavailable";
+import { IconHouse } from "@/components/icons";
 
 export const metadata = {
   title: "Template Gallery",
@@ -36,19 +37,21 @@ export default async function TemplatesPage() {
           <Link
             key={t.id}
             href={`/templates/${t.id}`}
-            className="group rounded-xl border border-bamboo-200 bg-white p-5 shadow-sm transition hover:border-leaf-300 hover:shadow-md"
+            className="group flex flex-col overflow-hidden rounded-2xl border border-bamboo-200 bg-white transition hover:border-leaf-300 hover:shadow-[0_1px_24px_-10px_rgba(83,131,67,0.5)]"
           >
-            <div className="mb-3 flex h-28 items-center justify-center rounded-lg bg-gradient-to-br from-leaf-100 to-bamboo-100 text-4xl">
-              🏠
+            <div className="culm-grid flex h-32 items-center justify-center border-b border-bamboo-100 bg-leaf-50/60 text-leaf-500/80 transition group-hover:text-leaf-600">
+              <IconHouse className="h-14 w-14" strokeWidth={1.25} />
             </div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-clay-500">
-              {t.category}
-            </span>
-            <h2 className="mt-1 font-display text-lg font-semibold text-leaf-800 group-hover:text-leaf-900">
-              {t.name}
-            </h2>
-            <p className="mt-1 line-clamp-2 text-sm text-bamboo-800">{t.description}</p>
-            <p className="mt-3 text-xs text-bamboo-600">Span: {t.known_span_range}</p>
+            <div className="p-5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-clay-600">
+                {t.category}
+              </span>
+              <h2 className="mt-1 font-display text-lg font-semibold text-leaf-800 group-hover:text-leaf-900">
+                {t.name}
+              </h2>
+              <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-bamboo-700">{t.description}</p>
+              <p className="mt-3 text-xs text-bamboo-600">Span: {t.known_span_range}</p>
+            </div>
           </Link>
         ))}
       </div>

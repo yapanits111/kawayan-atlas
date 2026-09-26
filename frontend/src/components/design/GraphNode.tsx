@@ -44,6 +44,7 @@ export function GraphNode({ data, id }: NodeProps) {
             <button
               onClick={() => d.duplicateNode?.(id)}
               title="Duplicate node"
+              aria-label="Duplicate node"
               className="nodrag rounded px-1 text-xs leading-none text-white/80 hover:bg-white/20 hover:text-white"
             >
               ⧉
@@ -53,6 +54,7 @@ export function GraphNode({ data, id }: NodeProps) {
             <button
               onClick={() => d.deleteNode?.(id)}
               title="Delete node"
+              aria-label="Delete node"
               className="nodrag rounded px-1 leading-none text-white/80 hover:bg-white/20 hover:text-white"
             >
               ×

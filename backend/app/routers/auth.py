@@ -1,15 +1,20 @@
-"""Accounts: register, login, and the current-user dependencies (Release 2)."""
+"""Accounts: register, login, settings, and the current-user dependencies (Release 2)."""
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User
-from ..schemas import LoginIn, RegisterIn, TokenOut, UserOut
+from ..models import Design, Graph, User
+from ..ratelimit import check as rate_check
+from ..schemas import ChangePasswordIn, LoginIn, RegisterIn, TokenOut, UserOut
 from ..security import create_token, hash_password, verify_password, verify_token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 def _normalize_email(email: str) -> str:
@@ -28,13 +33,19 @@ def get_optional_user(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User | None:
-    """Resolve the bearer token to a user, or None if absent/invalid — never raises."""
+    """Resolve the bearer token to a user, or None if absent/invalid — never raises.
+    A token whose version is behind the user's current token_version is treated as
+    revoked (e.g. after a password change or "log out everywhere")."""
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
-    user_id = verify_token(authorization[7:].strip())
-    if not user_id:
+    claim = verify_token(authorization[7:].strip())
+    if claim is None:
         return None
-    return db.get(User, user_id)
+    user_id, version = claim
+    user = db.get(User, user_id)
+    if user is None or user.token_version != version:
+        return None
+    return user
 
 
 def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
@@ -45,7 +56,8 @@ def get_current_user(user: User | None = Depends(get_optional_user)) -> User:
 
 
 @router.post("/register", response_model=TokenOut, status_code=201)
-def register(payload: RegisterIn, db: Session = Depends(get_db)):
+def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db)):
+    rate_check(f"register:{_client_ip(request)}", limit=5, window_seconds=60)
     email = _normalize_email(payload.email)
     if not _valid_email(email):
         raise HTTPException(status_code=422, detail="Enter a valid email address")
@@ -55,19 +67,56 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(access_token=create_token(user.id, user.token_version), user=UserOut.model_validate(user))
 
 
 @router.post("/login", response_model=TokenOut)
-def login(payload: LoginIn, db: Session = Depends(get_db)):
+def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
+    rate_check(f"login:{_client_ip(request)}", limit=10, window_seconds=60)
     email = _normalize_email(payload.email)
     user = db.query(User).filter(User.email == email).first()
     # Same error whether the email is unknown or the password is wrong (no user enumeration).
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    return TokenOut(access_token=create_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(access_token=create_token(user.id, user.token_version), user=UserOut.model_validate(user))
 
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/change-password", response_model=TokenOut)
+def change_password(
+    payload: ChangePasswordIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Your current password is incorrect")
+    user.password_hash = hash_password(payload.new_password)
+    # Revoke every existing token, then hand the caller a fresh one so this session stays in.
+    user.token_version += 1
+    db.commit()
+    db.refresh(user)
+    return TokenOut(access_token=create_token(user.id, user.token_version), user=UserOut.model_validate(user))
+
+
+@router.post("/logout-all", status_code=204)
+def logout_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Revoke every outstanding token for this account (including the caller's)."""
+    user.token_version += 1
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/me", status_code=204)
+def delete_account(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Delete the account and everything it owns — Design Lab graphs *and* Studio designs.
+    Both carry a FK to users.id, so they must go first. Anonymous (ownerless) graphs and
+    designs are left untouched, so shared links created before signing up keep working."""
+    db.query(Graph).filter(Graph.owner_id == user.id).delete(synchronize_session=False)
+    db.query(Design).filter(Design.owner_id == user.id).delete(synchronize_session=False)
+    db.delete(user)
+    db.commit()
+    return Response(status_code=204)

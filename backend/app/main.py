@@ -4,9 +4,12 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
+from .config import assert_secret_key_is_safe, settings
 from .database import Base, SessionLocal, engine
 from .routers import auth, calculator, designs, graphs, joints, species, templates
+
+# Fail closed rather than serve forgeable sessions signed with the published default key.
+assert_secret_key_is_safe()
 
 # For local dev / scaffolding this creates tables directly. On serverless (Vercel),
 # skip it — the schema is created once by migrations / the local seed against Neon,

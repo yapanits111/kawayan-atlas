@@ -81,6 +81,13 @@ class DesignCreate(BaseModel):
     based_on_template_version: str | None = None  # ignored on input; server stamps it
     components: list[DesignComponentIn] = Field(default_factory=list, max_length=50)
     params: DesignParams = Field(default_factory=DesignParams)
+    title: str | None = Field(default=None, max_length=120)
+
+
+class DesignUpdate(BaseModel):
+    """Rename an owned Studio design (parity with graphs)."""
+
+    title: str | None = Field(default=None, max_length=120)
 
 
 class DesignOut(BaseModel):
@@ -91,6 +98,21 @@ class DesignOut(BaseModel):
     based_on_template_version: str | None
     components: list[dict]
     params: dict
+    # As with graphs: never expose the owner's user id on a publicly-readable design.
+    owned_by_me: bool = False
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DesignSummary(BaseModel):
+    """A lightweight row for the "My designs" gallery (Studio side)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str | None = None
+    based_on_template_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -108,7 +130,9 @@ class GraphOut(BaseModel):
 
     id: str
     data: dict
-    owner_id: str | None = None
+    # Whether the *requesting* user owns this graph. We deliberately do not expose the
+    # owner's user id: graphs are readable by anyone holding the share link.
+    owned_by_me: bool = False
     title: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -125,6 +149,14 @@ class GraphSummary(BaseModel):
     updated_at: datetime
 
 
+class GraphUpdate(BaseModel):
+    """Partial update of an owned graph: rename (title) and/or overwrite (data).
+    Both optional so the same endpoint serves a rename and an update-in-place."""
+
+    title: str | None = Field(default=None, max_length=120)
+    data: dict | None = None
+
+
 # --- Accounts (Release 2) ---
 
 
@@ -136,6 +168,11 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: str = Field(max_length=254)
     password: str = Field(max_length=200)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
 
 
 class UserOut(BaseModel):

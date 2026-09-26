@@ -2,6 +2,7 @@ import Link from "next/link";
 import { api, type Species } from "@/lib/api";
 import { ApiUnavailable } from "@/components/ApiUnavailable";
 import { SpeciesGlyph } from "@/components/SpeciesGlyph";
+import { IconCompare } from "@/components/icons";
 import { speciesColor } from "@/lib/speciesColor";
 
 export const metadata = {
@@ -48,9 +49,10 @@ export default async function AtlasPage({
 
       <Link
         href="/compare"
-        className="mt-4 inline-block rounded-lg border border-leaf-300 bg-leaf-50 px-4 py-2 text-sm font-semibold text-leaf-700 transition hover:bg-leaf-100"
+        className="mt-4 inline-flex items-center gap-2 rounded-lg border border-leaf-300 bg-leaf-50 px-4 py-2 text-sm font-semibold text-leaf-700 transition hover:bg-leaf-100"
       >
-        ⇄ Compare species side by side
+        <IconCompare className="h-4 w-4" />
+        Compare species side by side
       </Link>
 
       {/* Filter form (GET → server component re-renders) */}
@@ -95,35 +97,37 @@ export default async function AtlasPage({
           <Link
             key={s.id}
             href={`/atlas/${s.id}`}
-            className="group rounded-xl border border-bamboo-200 bg-white p-5 shadow-sm transition hover:border-leaf-300 hover:shadow-md"
+            className="group flex flex-col overflow-hidden rounded-2xl border border-bamboo-200 bg-white transition hover:border-leaf-300 hover:shadow-[0_1px_24px_-10px_rgba(83,131,67,0.5)]"
           >
-            <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-gradient-to-br from-leaf-50 to-bamboo-100">
+            <div className="culm-grid flex h-28 items-center justify-center border-b border-bamboo-100 bg-leaf-50/60">
               <SpeciesGlyph
                 color={speciesColor(s.id)}
                 diameterRange={s.culm_diam_range}
                 className="h-20 w-20"
               />
             </div>
-            <h2 className="font-display text-xl font-semibold text-leaf-800 group-hover:text-leaf-900">
-              {s.name_local}
-            </h2>
-            <p className="italic text-sm text-bamboo-600">{s.name_scientific}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {s.structural_role.map((r) => (
-                <span
-                  key={r}
-                  className="rounded-full bg-leaf-100 px-2 py-0.5 text-xs font-medium text-leaf-700"
-                >
-                  {r}
-                </span>
-              ))}
-            </div>
-            <dl className="mt-4 space-y-1 text-sm text-bamboo-800">
-              <div className="flex justify-between gap-2">
-                <dt className="text-bamboo-600">Diameter</dt>
-                <dd className="text-right">{s.culm_diam_range}</dd>
+            <div className="p-5">
+              <h2 className="font-display text-xl font-semibold text-leaf-800 group-hover:text-leaf-900">
+                {s.name_local}
+              </h2>
+              <p className="text-sm italic text-bamboo-600">{s.name_scientific}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {s.structural_role.map((r) => (
+                  <span
+                    key={r}
+                    className="rounded-full bg-leaf-100 px-2 py-0.5 text-xs font-medium text-leaf-700"
+                  >
+                    {r}
+                  </span>
+                ))}
               </div>
-            </dl>
+              <dl className="mt-4 border-t border-bamboo-100 pt-3 text-sm text-bamboo-800">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-bamboo-600">Diameter</dt>
+                  <dd className="text-right font-medium">{s.culm_diam_range}</dd>
+                </div>
+              </dl>
+            </div>
           </Link>
         ))}
         {species.length === 0 && (

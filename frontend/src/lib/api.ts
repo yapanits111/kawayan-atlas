@@ -66,6 +66,16 @@ export interface Design {
   based_on_template_version: string | null;
   components: Record<string, unknown>[];
   params: Record<string, unknown>;
+  owned_by_me?: boolean;
+  title?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DesignSummary {
+  id: string;
+  title: string | null;
+  based_on_template_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -83,7 +93,8 @@ export class ApiError extends Error {
 export interface GraphDoc {
   id: string;
   data: { nodes: unknown[]; edges: unknown[] };
-  owner_id?: string | null;
+  /** Whether the signed-in requester owns this graph (the server never sends the owner id). */
+  owned_by_me?: boolean;
   title?: string | null;
   created_at: string;
   updated_at: string;
@@ -156,9 +167,9 @@ async function getJSON<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function postJSON<T>(path: string, body: unknown): Promise<T> {
+async function sendJSON<T>(method: "POST" | "PATCH", path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
@@ -167,6 +178,22 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+const postJSON = <T>(path: string, body: unknown) => sendJSON<T>("POST", path, body);
+const patchJSON = <T>(path: string, body: unknown) => sendJSON<T>("PATCH", path, body);
+
+/** For endpoints that return 204 No Content (delete, change-password). */
+async function sendNoBody(method: "POST" | "DELETE", path: string, body?: unknown): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...authHeaders() },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, await errorMessage(res, path));
+  }
+}
+const del = (path: string) => sendNoBody("DELETE", path);
 
 export const api = {
   listSpecies: (params?: { region?: string; role?: string; q?: string }) => {
@@ -189,17 +216,29 @@ export const api = {
     based_on_template_id?: string;
     components?: Record<string, unknown>[];
     params?: Record<string, unknown>;
+    title?: string | null;
   }) => postJSON<Design>(`/api/designs`, body),
   getDesign: (id: string) => getJSON<Design>(`/api/designs/${id}`),
+  listMyDesigns: () => getJSON<DesignSummary[]>(`/api/designs/mine`),
+  updateDesign: (id: string, patch: { title?: string }) =>
+    patchJSON<Design>(`/api/designs/${id}`, patch),
+  deleteDesign: (id: string) => del(`/api/designs/${id}`),
   createGraph: (data: { nodes: unknown[]; edges: unknown[] }, title?: string | null) =>
     postJSON<GraphDoc>(`/api/graphs`, { data, title: title ?? null }),
   getGraph: (id: string) => getJSON<GraphDoc>(`/api/graphs/${id}`),
+  updateGraph: (id: string, patch: { title?: string; data?: { nodes: unknown[]; edges: unknown[] } }) =>
+    patchJSON<GraphDoc>(`/api/graphs/${id}`, patch),
+  deleteGraph: (id: string) => del(`/api/graphs/${id}`),
   // Accounts (Release 2)
   register: (email: string, password: string) =>
     postJSON<TokenResponse>(`/api/auth/register`, { email, password }),
   login: (email: string, password: string) =>
     postJSON<TokenResponse>(`/api/auth/login`, { email, password }),
   me: () => getJSON<AuthUser>(`/api/auth/me`),
+  changePassword: (current_password: string, new_password: string) =>
+    postJSON<TokenResponse>(`/api/auth/change-password`, { current_password, new_password }),
+  logoutAll: () => sendNoBody("POST", `/api/auth/logout-all`),
+  deleteAccount: () => sendNoBody("DELETE", `/api/auth/me`),
   listMyGraphs: () => getJSON<GraphSummary[]>(`/api/graphs/mine`),
   calculateSingleMember: (body: {
     species_id: string;

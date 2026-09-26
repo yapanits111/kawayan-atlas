@@ -6,7 +6,7 @@ storage; on SQLite they serialize transparently.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -76,12 +76,18 @@ class Design(Base):
     based_on_template_version: Mapped[str | None] = mapped_column(String, nullable=True)
     components: Mapped[list] = mapped_column(JSON, default=list)
     params: Mapped[dict] = mapped_column(JSON, default=dict)  # span/load params
+    # Nullable so anonymous share links keep working; set when saved while signed in (R2).
+    owner_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
 
     template: Mapped["Template | None"] = relationship()
+    owner: Mapped["User | None"] = relationship()
 
 
 class User(Base):
@@ -93,6 +99,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # Bumped to revoke all outstanding tokens (password change, "log out everywhere").
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Graph(Base):
