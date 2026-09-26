@@ -1,0 +1,54 @@
+# Render blueprint — both services build from their own Dockerfile, so there is no
+# container registry to pay for (the registry is the only non-free part of the Azure
+# path in DEPLOY.md). Free plan: each service spins down after ~15 min idle and takes
+# up to a minute to wake on the next request.
+#
+# Deploy order matters, because NEXT_PUBLIC_API_URL is baked into the frontend bundle
+# at BUILD time:
+#   1. Deploy the backend, note its URL.
+#   2. Set NEXT_PUBLIC_API_URL on the frontend to that URL, then deploy it.
+#   3. Set CORS_ORIGINS on the backend to the frontend URL.
+services:
+  - type: web
+    name: kawayan-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # Auth tokens are stateless HMACs — startup aborts if this is left at the
+      # published development default. Set a long random value in the dashboard.
+      - key: SECRET_KEY
+        sync: false
+      # Neon Postgres connection string.
+      - key: DATABASE_URL
+        sync: false
+      # Frontend origin (comma-separated, no trailing slash). Set after step 2.
+      - key: CORS_ORIGINS
+        sync: false
+      # Render sets no platform marker of its own, so declare the environment
+      # explicitly — this is what arms the SECRET_KEY safety check.
+      - key: ENVIRONMENT
+        value: production
+      # Advisory-only analysis: the structural calculator stays gated off until an
+      # engineer signs off on the numbers.
+      - key: CALCULATOR_ENABLED
+        value: "false"
+      # No-op once species exist; only seeds an empty database.
+      - key: SEED_ON_STARTUP
+        value: "true"
+
+  - type: web
+    name: kawayan-frontend
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: frontend
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Consumed as a Docker build arg (see frontend/Dockerfile) — changing it
+      # requires a rebuild, not just a restart.
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
