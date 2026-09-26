@@ -1,5 +1,9 @@
 # Deploying Kawayan Atlas to Azure (Tier 1 — demo / low-traffic)
 
+> **This path costs ~$5/month** for the Azure Container Registry. For the same Docker
+> containers at **$0**, see [DEPLOY-RENDER.md](DEPLOY-RENDER.md) — Render builds the images
+> from the repo, so there is no registry to pay for.
+
 This guide stands the app up on **Azure Container Apps** (both frontend and backend,
 each scale-to-zero) with the database on **Neon**. It's built for occasional demo use:
 when nobody's hitting it, compute scales to zero and costs ~nothing.

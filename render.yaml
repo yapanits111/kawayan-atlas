@@ -3,6 +3,9 @@
 # path in DEPLOY.md). Free plan: each service spins down after ~15 min idle and takes
 # up to a minute to wake on the next request.
 #
+# Region is ohio to sit next to the Neon database (us-east-2). Query latency beats
+# proximity to users here: the browser makes one round trip, the backend makes many.
+#
 # Deploy order matters, because NEXT_PUBLIC_API_URL is baked into the frontend bundle
 # at BUILD time:
 #   1. Deploy the backend, note its URL.
@@ -13,7 +16,7 @@ services:
     name: kawayan-backend
     runtime: docker
     plan: free
-    region: singapore
+    region: ohio
     rootDir: backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
@@ -44,7 +47,7 @@ services:
     name: kawayan-frontend
     runtime: docker
     plan: free
-    region: singapore
+    region: ohio
     rootDir: frontend
     dockerfilePath: ./Dockerfile
     envVars:
