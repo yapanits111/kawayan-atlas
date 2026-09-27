@@ -1,5 +1,8 @@
 # Deploying Kawayan Atlas (free tier, $0)
 
+> **Outdated.** This describes Release 1, which had no accounts. Release 2 adds login,
+> which means a required `SECRET_KEY`. Use [DEPLOY-RENDER.md](DEPLOY-RENDER.md) instead.
+
 This deploys the **Release 1 demo** — full-stack, no login — entirely on free tiers:
 
 | Piece | Service | Free? |

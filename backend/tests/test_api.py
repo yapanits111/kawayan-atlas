@@ -444,3 +444,29 @@ def test_calculator_is_gated_off(client):
     assert "not a stamped" in body["disclaimer"].lower()
     # No structural numbers leak while gated.
     assert body["axial_capacity_kn"] is None
+
+
+# --- settings ---------------------------------------------------------------
+
+
+def test_bare_postgres_urls_get_the_psycopg3_dialect():
+    """A connection string copied straight from the Neon dashboard must work.
+
+    Only psycopg 3 is installed, but SQLAlchemy maps bare `postgresql://` to psycopg2,
+    so an unnormalised URL would fail at connect time with ModuleNotFoundError.
+    """
+    from app.config import Settings
+
+    neon = "postgresql://user:pw@ep-x.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    assert Settings(database_url=neon).database_url == (
+        "postgresql+psycopg://user:pw@ep-x.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    )
+
+    # Some hosts still emit the legacy scheme, which SQLAlchemy rejects outright.
+    assert Settings(database_url="postgres://u:p@h/db").database_url == (
+        "postgresql+psycopg://u:p@h/db"
+    )
+
+    # An explicit driver is respected, and SQLite is untouched.
+    for url in ("postgresql+psycopg://u:p@h/db", "sqlite:///./kawayan.db"):
+        assert Settings(database_url=url).database_url == url
