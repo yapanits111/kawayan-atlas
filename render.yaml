@@ -17,8 +17,13 @@ services:
     runtime: docker
     plan: free
     region: ohio
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
+    # Paths are relative to the REPO ROOT, not to the service directory.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Only redeploy when this service's own files change.
+    buildFilter:
+      paths:
+        - backend/**
     healthCheckPath: /api/health
     envVars:
       # Auth tokens are stateless HMACs — startup aborts if this is left at the
@@ -50,8 +55,13 @@ services:
     runtime: docker
     plan: free
     region: ohio
-    rootDir: frontend
-    dockerfilePath: ./Dockerfile
+    # Paths are relative to the REPO ROOT, not to the service directory.
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    # Only redeploy when this service's own files change.
+    buildFilter:
+      paths:
+        - frontend/**
     envVars:
       # Consumed as a Docker build arg (see frontend/Dockerfile) — changing it
       # requires a rebuild, not just a restart.
