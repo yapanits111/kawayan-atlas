@@ -22,9 +22,11 @@ services:
     healthCheckPath: /api/health
     envVars:
       # Auth tokens are stateless HMACs — startup aborts if this is left at the
-      # published development default. Set a long random value in the dashboard.
+      # published development default. generateValue lets Render mint a random
+      # value on first deploy, so the secret never passes through a clipboard.
+      # Changing it later invalidates every existing login.
       - key: SECRET_KEY
-        sync: false
+        generateValue: true
       # Neon Postgres connection string.
       - key: DATABASE_URL
         sync: false
