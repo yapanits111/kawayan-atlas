@@ -169,6 +169,11 @@ explicitly under the frontend service in `render.yaml`:
         sync: false
 ```
 
+**Frontend builds, then every request returns `502 Bad Gateway`**
+Next's standalone server binds `process.env.HOSTNAME || '0.0.0.0'`, and Docker sets
+`HOSTNAME` to the container ID — so it binds to the container's own hostname and Render's
+proxy cannot reach it. `frontend/Dockerfile` pins `ENV HOSTNAME="0.0.0.0"` to prevent this.
+
 **Frontend build fails on `COPY /app/public`: `"/app/public": not found`**
 `frontend/public/` is missing. Git does not track empty directories, so it is held in
 place by `frontend/public/.gitkeep` — restore that file if it gets cleaned away.
