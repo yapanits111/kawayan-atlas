@@ -29,8 +29,10 @@ the same account.
 ## Before you start
 
 1. A [Render](https://render.com) account connected to this GitHub repo (no card needed).
-2. Your **Neon connection string** — it is already in `backend/.env` on the
-   `DATABASE_URL=` line. Copy it from there. Never commit it.
+2. Your **Neon connection string** — either from the Neon dashboard or the
+   `DATABASE_URL=` line in `backend/.env`. Never commit it. Either scheme works:
+   `settings.database_url` rewrites a bare `postgresql://` to `postgresql+psycopg://`,
+   because only psycopg 3 is installed and SQLAlchemy would otherwise reach for psycopg2.
 3. The branch you want to deploy. `render.yaml` lives on **`v2`**, and `v2` is currently
    12 commits ahead of `main`. Render lets you pick the branch, so you do **not** need to
    merge into `main` to deploy.
@@ -167,6 +169,11 @@ explicitly under the frontend service in `render.yaml`:
         sync: false
 ```
 
+**Backend log ends in `ModuleNotFoundError: No module named 'psycopg2'`**
+`DATABASE_URL` reached SQLAlchemy without a driver suffix. The validator in
+`app/config.py` normalises `postgresql://` and `postgres://`, so this should not happen —
+if it does, set the value to `postgresql+psycopg://...` explicitly.
+
 **Requests fail with a CORS error in the console**
 `CORS_ORIGINS` does not exactly match the frontend origin. Check scheme and trailing slash.
 
@@ -202,7 +209,7 @@ migrations still matter.
 | Variable | Service | Value | Notes |
 |---|---|---|---|
 | `SECRET_KEY` | backend | *auto-generated* | `generateValue: true`; startup fails on the default. |
-| `DATABASE_URL` | backend | Neon `postgresql+psycopg://...` | From `backend/.env`. |
+| `DATABASE_URL` | backend | Neon connection string | `postgresql://` is rewritten to `postgresql+psycopg://`. |
 | `CORS_ORIGINS` | backend | frontend URL | Comma-separated, no trailing slash. |
 | `ENVIRONMENT` | backend | `production` | Set in `render.yaml`; arms the key check. |
 | `CALCULATOR_ENABLED` | backend | `false` | Keep off until an engineer signs off. |

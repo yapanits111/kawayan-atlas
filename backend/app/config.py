@@ -1,4 +1,5 @@
 """Application settings, loaded from environment / .env."""
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Signing key used when none is configured. Auth tokens are stateless HMACs, so anyone who
@@ -29,6 +30,23 @@ class Settings(BaseSettings):
     secret_key: str = INSECURE_DEFAULT_SECRET
     # Bearer-token lifetime — 30 days, so a login persists comfortably.
     token_ttl_seconds: int = 60 * 60 * 24 * 30
+
+    @field_validator("database_url")
+    @classmethod
+    def _pin_postgres_driver(cls, value: str) -> str:
+        """Force the psycopg 3 dialect on bare Postgres URLs.
+
+        Neon (like most dashboards) hands out `postgresql://...`, which SQLAlchemy maps to
+        psycopg2 — a driver this project deliberately does not install; requirements.txt
+        pins `psycopg[binary]` (version 3). Left alone, a correct-looking connection string
+        pasted from the Neon dashboard fails at import with `ModuleNotFoundError: psycopg2`.
+        `postgres://` is also accepted because some hosts still emit it and SQLAlchemy
+        rejects that scheme outright.
+        """
+        for prefix in ("postgresql://", "postgres://"):
+            if value.startswith(prefix):
+                return f"postgresql+psycopg://{value[len(prefix):]}"
+        return value
 
     @property
     def cors_origins_list(self) -> list[str]:
