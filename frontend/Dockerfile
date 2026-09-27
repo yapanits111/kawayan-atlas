@@ -27,6 +27,8 @@ ENV PORT=3000
 # The standalone output bundles the server plus only the node_modules it traced.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# public/ is tracked via a .gitkeep so this COPY always has a target; an absent
+# directory fails the build rather than being skipped.
 COPY --from=build /app/public ./public
 EXPOSE 3000
 CMD ["node", "server.js"]

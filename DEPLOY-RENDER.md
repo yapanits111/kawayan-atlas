@@ -169,6 +169,10 @@ explicitly under the frontend service in `render.yaml`:
         sync: false
 ```
 
+**Frontend build fails on `COPY /app/public`: `"/app/public": not found`**
+`frontend/public/` is missing. Git does not track empty directories, so it is held in
+place by `frontend/public/.gitkeep` — restore that file if it gets cleaned away.
+
 **Backend log ends in `ModuleNotFoundError: No module named 'psycopg2'`**
 `DATABASE_URL` reached SQLAlchemy without a driver suffix. The validator in
 `app/config.py` normalises `postgresql://` and `postgres://`, so this should not happen —
