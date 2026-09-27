@@ -24,6 +24,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Container hosts inject the listen port via $PORT; default 3000 for local runs.
 ENV PORT=3000
+# Next's standalone server binds `process.env.HOSTNAME || '0.0.0.0'`, and Docker sets
+# HOSTNAME to the container ID — so without this it binds to the container's own
+# hostname and the platform's proxy cannot reach it (502). Pin it to all interfaces.
+ENV HOSTNAME="0.0.0.0"
 # The standalone output bundles the server plus only the node_modules it traced.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
