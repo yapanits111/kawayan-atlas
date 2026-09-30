@@ -31,6 +31,11 @@ Curve-consuming nodes also accept `elements` and read their centrelines.
 **Units.** Lengths and coordinates are metres; culm diameters, wall thicknesses, strip
 widths and ply thicknesses are millimetres; angles are degrees.
 
+**Controls.** Every numeric parameter is a slider in the editor; *Range* gives the slider's
+span and step (a saved value outside it stretches the track rather than being clamped). A
+Spline's points can be typed, wired in from any `points` output, or sketched with the
+**Draw** tool, which simplifies a freehand stroke into control points on a chosen plane.
+
 **The four layers** follow the whitepaper's dependency order (§6, §14): geometry is the
 foundation, the bamboo layer is thin and sits on top of it, output turns the model into a
 buildable document, and analysis is advisory only.
@@ -106,9 +111,9 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **x** | x | `0` | — |
-| **y** | y | `0` | — |
-| **z** | z | `0` | — |
+| **x** | x | `0` | min -20, max 20, step 0.1 |
+| **y** | y | `0` | min -20, max 20, step 0.1 |
+| **z** | z | `0` | min -20, max 20, step 0.1 |
 
 #### `line` — Line
 
@@ -119,14 +124,14 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **ax** | A.x | `-2` | — |
-| **ay** | A.y | `0` | — |
-| **az** | A.z | `0` | — |
-| **bx** | B.x | `2` | — |
-| **by** | B.y | `0` | — |
-| **bz** | B.z | `0` | — |
+| **ax** | A.x | `-2` | min -20, max 20, step 0.1 |
+| **ay** | A.y | `0` | min -20, max 20, step 0.1 |
+| **az** | A.z | `0` | min -20, max 20, step 0.1 |
+| **bx** | B.x | `2` | min -20, max 20, step 0.1 |
+| **by** | B.y | `0` | min -20, max 20, step 0.1 |
+| **bz** | B.z | `0` | min -20, max 20, step 0.1 |
 
-#### `polyline` — Polyline (curve)
+#### `polyline` — Spline (curve)
 
 | | |
 |---|---|
@@ -135,14 +140,10 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **pts** | points | `# x, y, z per line — a freeform curve through these points
--3, 0, 0
--1.5, 1.4, 0
-0, 1.9, 0
-1.5, 1.4, 0
-3, 0, 0` | — |
+| **pts** | points | 5 lines, e.g. `-3, 0, 0` | free text, one entry per line |
 | **closed** | closed | `no` | `no` / `yes` |
-| **smooth** | smooth | `12` | min 0, max 40 |
+| **smooth** | smoothing | `12` | min 0, max 40, step 1 |
+| **tension** | tension | `0` | min 0, max 1, step 0.05 |
 
 #### `arc` — Arc
 
@@ -153,11 +154,11 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **radius** | radius | `3` | min 0.1 |
-| **start** | start° | `0` | — |
-| **end** | end° | `180` | — |
+| **radius** | radius | `3` | min 0.1, max 20, step 0.1 |
+| **start** | start° | `0` | min -360, max 360, step 5 |
+| **end** | end° | `180` | min -360, max 360, step 5 |
 | **plane** | plane | `xz` | `xy` / `xz` / `yz` |
-| **samples** | samples | `24` | min 2, max 128 |
+| **samples** | samples | `24` | min 2, max 128, step 1 |
 
 #### `grid` — Grid
 
@@ -168,10 +169,10 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **cols** | cols | `4` | min 1, max 40 |
-| **rows** | rows | `4` | min 1, max 40 |
-| **sx** | spacing X | `1` | min 0.1 |
-| **sy** | spacing Y | `1` | min 0.1 |
+| **cols** | cols | `4` | min 1, max 40, step 1 |
+| **rows** | rows | `4` | min 1, max 40, step 1 |
+| **sx** | spacing X | `1` | min 0.1, max 10, step 0.1 |
+| **sy** | spacing Y | `1` | min 0.1, max 10, step 0.1 |
 
 #### `circle` — Circle
 
@@ -182,9 +183,9 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **radius** | radius | `2` | min 0.1 |
+| **radius** | radius | `2` | min 0.1, max 20, step 0.1 |
 | **plane** | plane | `xz` | `xy` / `xz` / `yz` |
-| **seg** | segments | `32` | min 3, max 128 |
+| **seg** | segments | `32` | min 3, max 128, step 1 |
 
 #### `rectangle` — Rectangle
 
@@ -195,8 +196,8 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **w** | width | `3` | min 0.1 |
-| **d** | depth | `3` | min 0.1 |
+| **w** | width | `3` | min 0.1, max 30, step 0.1 |
+| **d** | depth | `3` | min 0.1, max 30, step 0.1 |
 | **plane** | plane | `xz` | `xy` / `xz` / `yz` |
 
 #### `extrude` — Extrude (posts)
@@ -208,7 +209,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **height** | height | `2.5` | — |
+| **height** | height | `2.5` | min -20, max 20, step 0.1 |
 | **axis** | axis | `y` | `x` / `y` / `z` |
 
 #### `mirror` — Mirror
@@ -231,7 +232,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **count** | count | `8` | min 2, max 100 |
+| **count** | count | `8` | min 2, max 100, step 1 |
 
 #### `divide` — Divide
 
@@ -242,7 +243,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **count** | count | `6` | min 1, max 200 |
+| **count** | count | `6` | min 1, max 200, step 1 |
 
 #### `transform` — Transform
 
@@ -253,13 +254,13 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **tx** | move X | `0` | — |
-| **ty** | move Y | `0` | — |
-| **tz** | move Z | `0` | — |
-| **rx** | rot X° | `0` | — |
-| **ry** | rot Y° | `0` | — |
-| **rz** | rot Z° | `0` | — |
-| **s** | scale | `1` | min 0.01 |
+| **tx** | move X | `0` | min -20, max 20, step 0.1 |
+| **ty** | move Y | `0` | min -20, max 20, step 0.1 |
+| **tz** | move Z | `0` | min -20, max 20, step 0.1 |
+| **rx** | rot X° | `0` | min -180, max 180, step 5 |
+| **ry** | rot Y° | `0` | min -180, max 180, step 5 |
+| **rz** | rot Z° | `0` | min -180, max 180, step 5 |
+| **s** | scale | `1` | min 0.05, max 10, step 0.05 |
 
 #### `arrayLinear` — Array (linear)
 
@@ -270,10 +271,10 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **count** | count | `3` | min 1, max 100 |
-| **dx** | step X | `0` | — |
-| **dy** | step Y | `0` | — |
-| **dz** | step Z | `1` | — |
+| **count** | count | `3` | min 1, max 100, step 1 |
+| **dx** | step X | `0` | min -10, max 10, step 0.1 |
+| **dy** | step Y | `0` | min -10, max 10, step 0.1 |
+| **dz** | step Z | `1` | min -10, max 10, step 0.1 |
 
 #### `arrayPolar` — Array (polar)
 
@@ -284,8 +285,8 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **count** | count | `6` | min 1, max 100 |
-| **total** | sweep° | `360` | — |
+| **count** | count | `6` | min 1, max 100, step 1 |
+| **total** | sweep° | `360` | min -360, max 360, step 15 |
 | **axis** | axis | `y` | `x` / `y` / `z` |
 
 #### `weave` — Weave
@@ -297,10 +298,10 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **w** | width | `3` | min 0.2 |
-| **h** | height | `2.4` | min 0.2 |
-| **u** | warp | `8` | min 1, max 60 |
-| **v** | weft | `7` | min 1, max 60 |
+| **w** | width | `3` | min 0.2, max 20, step 0.1 |
+| **h** | height | `2.4` | min 0.2, max 20, step 0.1 |
+| **u** | warp | `8` | min 1, max 60, step 1 |
+| **v** | weft | `7` | min 1, max 60, step 1 |
 | **plane** | plane | `xy` | `xy` / `xz` / `yz` |
 
 #### `intersect` — Intersect
@@ -312,7 +313,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **tol** | tolerance (m) | `0.02` | min 0.001 |
+| **tol** | tolerance (m) | `0.02` | min 0.005, max 0.5, step 0.005 |
 
 #### `offset` — Offset
 
@@ -323,7 +324,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **dist** | distance (m) | `0.4` | — |
+| **dist** | distance (m) | `0.4` | min -5, max 5, step 0.05 |
 | **plane** | plane | `xy` | `xy` / `xz` / `yz` |
 
 
@@ -339,10 +340,10 @@ arc → divide → culm → array → schedule
 | Param | Label | Default | Range |
 |---|---|---|---|
 | **species** | species | `(none)` | from the species atlas |
-| **d0** | Ø start (mm) | `90` | min 5 |
-| **d1** | Ø end (mm) | `75` | min 5 |
-| **wall** | wall (mm) | `12` | min 1 |
-| **nodes** | node spacing (m) | `0.3` | min 0 |
+| **d0** | Ø start (mm) | `90` | min 5, max 300, step 1 |
+| **d1** | Ø end (mm) | `75` | min 5, max 300, step 1 |
+| **wall** | wall (mm) | `12` | min 1, max 40, step 1 |
+| **nodes** | node spacing (m) | `0.3` | min 0, max 1, step 0.01 |
 
 #### `strip` — Strip
 
@@ -353,8 +354,8 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **w** | width (mm) | `25` | min 2 |
-| **t** | thick (mm) | `6` | min 1 |
+| **w** | width (mm) | `25` | min 2, max 200, step 1 |
+| **t** | thick (mm) | `6` | min 1, max 30, step 1 |
 
 #### `internode` — Node / internode
 
@@ -365,7 +366,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **spacing** | node spacing (m) | `0.3` | min 0.02 |
+| **spacing** | node spacing (m) | `0.3` | min 0.02, max 2, step 0.01 |
 | **mode** | mode | `mark` | `mark` / `split` |
 
 #### `laminate` — Laminate (glulam)
@@ -377,9 +378,9 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **w** | width (mm) | `60` | min 5 |
-| **ply** | ply thick (mm) | `6` | min 0.5 |
-| **layers** | layers | `5` | min 2, max 40 |
+| **w** | width (mm) | `60` | min 5, max 400, step 1 |
+| **ply** | ply thick (mm) | `6` | min 0.5, max 20, step 0.5 |
+| **layers** | layers | `5` | min 2, max 40, step 1 |
 | **layup** | layup | `parallel` | `parallel` / `alternating` |
 
 #### `joint` — Joint
@@ -393,8 +394,8 @@ arc → divide → culm → array → schedule
 |---|---|---|---|
 | **mode** | typing | `auto` | `auto` / `manual` |
 | **type** | type (manual) | `(none)` | from the joint library |
-| **splice** | splice° (bolt ≥) | `150` | min 90, max 180 |
-| **tol** | tolerance (m) | `0.05` | min 0.001 |
+| **splice** | splice° (bolt ≥) | `150` | min 90, max 180, step 5 |
+| **tol** | tolerance (m) | `0.05` | min 0.01, max 1, step 0.01 |
 
 #### `bundle` — Bundle
 
@@ -418,7 +419,7 @@ arc → divide → culm → array → schedule
 | Param | Label | Default | Range |
 |---|---|---|---|
 | **kind** | type | `distributed` | `distributed` / `point` |
-| **value** | value (kN) | `1` | min 0 |
+| **value** | value (kN) | `1` | min 0, max 100, step 0.5 |
 
 #### `support` — Support
 
@@ -440,7 +441,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **slenderness** | L/Ø limit | `30` | min 5 |
+| **slenderness** | L/Ø limit | `30` | min 5, max 150, step 1 |
 
 
 ### Output
@@ -454,7 +455,7 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **usable** | usable culm (m) | `6` | min 1 |
+| **usable** | usable culm (m) | `6` | min 1, max 20, step 0.5 |
 
 #### `inventory` — Pole inventory
 
@@ -465,17 +466,9 @@ arc → divide → culm → array → schedule
 
 | Param | Label | Default | Range |
 |---|---|---|---|
-| **poles** | measured poles | `# id, length_m, base_mm, tip_mm
-P1, 6.0, 105, 82
-P2, 6.0, 100, 78
-P3, 6.0, 98, 76
-P4, 5.5, 95, 74
-P5, 5.5, 92, 72
-P6, 5.0, 90, 70
-P7, 5.0, 88, 68
-P8, 4.5, 85, 66` | — |
-| **kerf** | saw kerf (m) | `0.01` | min 0 |
-| **tol** | Ø tolerance (mm) | `5` | min 0 |
+| **poles** | measured poles | 8 lines, e.g. `P1, 6.0, 105, 82` | free text, one entry per line |
+| **kerf** | saw kerf (m) | `0.01` | min 0, max 0.1, step 0.005 |
+| **tol** | Ø tolerance (mm) | `5` | min 0, max 50, step 1 |
 
 ---
 

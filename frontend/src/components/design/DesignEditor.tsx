@@ -13,17 +13,20 @@ import {
   type Connection,
   type Node,
   type Edge,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
 import { useAuth } from "@/components/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { IconPencil } from "@/components/icons";
 import { GraphNode } from "./GraphNode";
 import { NoteNode } from "./NoteNode";
 import { Viewport3D } from "./Viewport3D";
 import { OutputPanel } from "./OutputPanel";
 import { AddNodeMenu } from "./AddNodeMenu";
+import { DrawPad, type DrawResult } from "./DrawPad";
 import { NODE_DEFS } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
 import { EXAMPLES } from "@/lib/design/examples";
@@ -100,6 +103,10 @@ export function DesignEditor() {
   const [savedToAccount, setSavedToAccount] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  // Freehand draw pad: open for a new spline (targetId null) or to redraw an existing one.
+  const [draw, setDraw] = useState<{ targetId: string | null } | null>(null);
+  const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   // The currently-loaded saved graph (from a share/gallery link or a prior save this
   // session). If the signed-in user owns it, Save updates it in place instead of
   // creating a duplicate.
@@ -327,16 +334,79 @@ export function DesignEditor() {
     [setNodes],
   );
 
+  const openDraw = useCallback((targetId?: string) => setDraw({ targetId: targetId ?? null }), []);
+
   // Inject the right handlers per node kind, and keep notes stacked below the graph nodes.
-  const rfNodes = useMemo(
+  const rfNodes = useMemo<Node[]>(
     () =>
       nodes.map((n) =>
         n.type === "note"
           ? { ...n, zIndex: 0, data: { ...n.data, updateNote, deleteNode } }
-          : { ...n, zIndex: 1, data: { ...n.data, updateParam, deleteNode, duplicateNode, speciesOptions, jointOptions } },
+          : { ...n, zIndex: 1, data: { ...n.data, updateParam, deleteNode, duplicateNode, openDraw, speciesOptions, jointOptions } },
       ),
-    [nodes, updateParam, updateNote, deleteNode, duplicateNode, speciesOptions, jointOptions],
+    [nodes, updateParam, updateNote, deleteNode, duplicateNode, openDraw, speciesOptions, jointOptions],
   );
+
+  /** Where drawn nodes go: just below the existing graph (so they never land on top of
+   *  another node), or the middle of the visible canvas when the graph is empty. */
+  function dropPoint(): { x: number; y: number } {
+    if (nodes.length) {
+      const minX = Math.min(...nodes.map((n) => n.position.x));
+      const maxY = Math.max(...nodes.map((n) => n.position.y + (n.measured?.height ?? n.height ?? 200)));
+      return { x: minX, y: maxY + 60 };
+    }
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const inst = rfInstance.current;
+    if (!rect || !inst) return { x: 0, y: 0 };
+    const c = inst.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    return { x: c.x - 230, y: c.y - 120 };
+  }
+
+  /** A finished drawing either replaces a spline's points (redraw) or becomes a new Spline
+   *  node — optionally already wired into a Culm/Strip so it shows up in 3D straight away. */
+  function applyDrawing(r: DrawResult) {
+    const targetId = draw?.targetId ?? null;
+    setDraw(null);
+    const curveParams = { pts: r.pts, smooth: r.smooth, tension: r.tension, closed: r.closed };
+
+    if (targetId) {
+      setNodes((ns) =>
+        ns.map((n) =>
+          n.id === targetId
+            ? { ...n, data: { ...n.data, params: { ...(n.data as { params: object }).params, ...curveParams } } }
+            : n,
+        ),
+      );
+      return;
+    }
+
+    const at = dropPoint();
+    const splineId = `polyline-${idCounter.current++}`;
+    const added: Node[] = [
+      {
+        id: splineId,
+        type: "graphNode",
+        position: at,
+        selected: true,
+        data: { type: "polyline", params: { ...defaultParams("polyline"), ...curveParams } },
+      },
+    ];
+    const wires: Edge[] = [];
+    if (r.sweep !== "none") {
+      const sweepId = `${r.sweep}-${idCounter.current++}`;
+      added.push({
+        id: sweepId,
+        type: "graphNode",
+        position: { x: at.x + 260, y: at.y },
+        data: { type: r.sweep, params: defaultParams(r.sweep) },
+      });
+      wires.push({ id: `e-${idCounter.current++}`, source: splineId, sourceHandle: "out", target: sweepId, targetHandle: "in" });
+    }
+    setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...added]);
+    setEdges((es) => [...es, ...wires]);
+    // Once the new nodes have been measured, frame the whole graph so they're in view.
+    setTimeout(() => rfInstance.current?.fitView({ duration: 400, padding: 0.15 }), 150);
+  }
 
   const onConnect = useCallback(
     (c: Connection) => setEdges((eds) => addEdge(c, eds)),
@@ -472,9 +542,12 @@ export function DesignEditor() {
   }, [applySnap]);
 
   // Keyboard: Ctrl/Cmd+Z undo, +Shift+Z / +Y redo, +C copy selection, +V paste
-  // (all suppressed while typing in a field, so native copy/paste still works there).
+  // (all suppressed while typing in a field, so native copy/paste still works there, and
+  // while the draw pad is open, so shortcuts can't edit the graph hidden behind it).
+  const drawOpen = draw !== null;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (drawOpen) return;
       const el = e.target as HTMLElement;
       if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
       const mod = e.ctrlKey || e.metaKey;
@@ -494,7 +567,7 @@ export function DesignEditor() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, copySelection, pasteClipboard]);
+  }, [undo, redo, copySelection, pasteClipboard, drawOpen]);
 
   // Live evaluation (dependency-ordered) — recomputes on any node/edge change.
   const result = useMemo(() => {
@@ -561,13 +634,15 @@ export function DesignEditor() {
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b border-bamboo-200 bg-bamboo-50 px-4 py-2">
-        <span className="font-display text-lg font-semibold text-leaf-800">Design Lab</span>
-        <span className="hidden text-xs text-bamboo-600 sm:inline">
+        <span className="whitespace-nowrap font-display text-lg font-semibold text-leaf-800">Design Lab</span>
+        {/* Only on very wide screens; otherwise the shortcuts live behind the keyboard button. */}
+        <span className="hidden text-xs text-bamboo-600 2xl:inline">
           drag to connect · shift-select, Ctrl/⌘ C/V to copy, Del to remove
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        {/* Buttons never break mid-label; on narrow screens whole buttons wrap to a new row. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2 whitespace-nowrap">
           <select
-            className="rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
+            className="w-36 rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
             value=""
             onChange={(e) => {
               if (e.target.value) loadExample(e.target.value);
@@ -580,6 +655,14 @@ export function DesignEditor() {
             ))}
           </select>
           <AddNodeMenu onAdd={addNode} />
+          <button
+            onClick={() => openDraw()}
+            title="Sketch a curve freehand — it becomes a Spline node you can wire and tune"
+            className="inline-flex items-center gap-1.5 rounded-md border border-leaf-500 bg-white px-3 py-1.5 text-sm font-medium text-leaf-700 hover:bg-leaf-50"
+          >
+            <IconPencil className="h-4 w-4" />
+            Draw
+          </button>
           <button
             onClick={addNote}
             title="Add a note to annotate the graph"
@@ -657,7 +740,7 @@ export function DesignEditor() {
               ⌨
             </button>
             {showHelp && (
-              <div className="absolute right-0 z-30 mt-1 w-64 rounded-lg border border-bamboo-200 bg-white p-3 text-xs shadow-lg">
+              <div className="absolute right-0 z-30 mt-1 w-64 whitespace-normal rounded-lg border border-bamboo-200 bg-white p-3 text-xs shadow-lg">
                 <div className="mb-1.5 font-semibold text-leaf-800">Keyboard &amp; mouse</div>
                 <ul className="space-y-1 text-bamboo-700">
                   <li>Drag a port to a port to <strong>connect</strong></li>
@@ -697,12 +780,12 @@ export function DesignEditor() {
 
       {/* Split: node canvas | (3D view over cut-list) */}
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1.15fr_1fr]">
-        <div className="relative min-h-0 border-r border-bamboo-200">
+        <div ref={canvasRef} className="relative min-h-0 border-r border-bamboo-200">
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6 text-center">
               <div className="max-w-xs text-sm text-bamboo-500">
-                Empty canvas. Use <strong>+ Add node</strong> or pick an <strong>Example</strong> to
-                begin, then drag port-to-port to connect.
+                Empty canvas. Use <strong>+ Add node</strong>, <strong>Draw</strong> a curve, or
+                pick an <strong>Example</strong> to begin, then drag port-to-port to connect.
               </div>
             </div>
           )}
@@ -714,11 +797,15 @@ export function DesignEditor() {
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
+            onInit={(inst) => {
+              rfInstance.current = inst;
+            }}
             fitView
             // Delete / Backspace removes the selected nodes and edges (React Flow ignores
             // the key while a param field is focused, so editing stays safe). Selecting an
-            // edge and pressing Delete is the only way to unwire two nodes.
-            deleteKeyCode={["Delete", "Backspace"]}
+            // edge and pressing Delete is the only way to unwire two nodes. Off while the draw
+            // pad is open so it can't delete nodes hidden behind the dialog.
+            deleteKeyCode={drawOpen ? null : ["Delete", "Backspace"]}
             proOptions={{ hideAttribution: true }}
           >
             <Background color="#d9cfb2" gap={18} />
@@ -743,6 +830,25 @@ export function DesignEditor() {
           </div>
         </div>
       </div>
+
+      {draw && (
+        <DrawPad
+          mode={draw.targetId ? "redraw" : "new"}
+          wiredInput={
+            !!draw.targetId && edges.some((e) => e.target === draw.targetId && e.targetHandle === "in")
+          }
+          initial={(() => {
+            const p = (nodes.find((n) => n.id === draw.targetId)?.data as
+              | { params?: Record<string, number | string> }
+              | undefined)?.params;
+            return p
+              ? { smooth: Number(p.smooth), tension: Number(p.tension), closed: String(p.closed) }
+              : undefined;
+          })()}
+          onCancel={() => setDraw(null)}
+          onSubmit={applyDrawing}
+        />
+      )}
     </div>
   );
 }

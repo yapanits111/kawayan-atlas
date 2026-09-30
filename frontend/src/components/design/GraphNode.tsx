@@ -1,7 +1,15 @@
 "use client";
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { NODE_DEFS } from "@/lib/design/nodeDefs";
+import { NODE_DEFS, type ParamDef } from "@/lib/design/nodeDefs";
+import { IconPencil } from "@/components/icons";
+import { ParamSlider } from "./ParamSlider";
+
+/** A numeric param's current value, falling back to its default if unset or unparseable. */
+function numericValue(raw: number | string | undefined, param: ParamDef): number {
+  const v = Number(raw ?? param.default);
+  return Number.isFinite(v) ? v : Number(param.default);
+}
 
 const CAT_COLOR: Record<string, string> = {
   Geometry: "#538343",
@@ -20,6 +28,7 @@ export function GraphNode({ data, id }: NodeProps) {
     updateParam: (nodeId: string, key: string, value: number | string) => void;
     deleteNode?: (nodeId: string) => void;
     duplicateNode?: (nodeId: string) => void;
+    openDraw?: (nodeId: string) => void;
     speciesOptions?: { value: string; label: string }[];
     jointOptions?: { value: string; label: string }[];
     error?: string;
@@ -40,6 +49,16 @@ export function GraphNode({ data, id }: NodeProps) {
       >
         <span>{def.label}</span>
         <span className="flex items-center gap-0.5">
+          {d.type === "polyline" && d.openDraw && (
+            <button
+              onClick={() => d.openDraw?.(id)}
+              title="Redraw this curve freehand"
+              aria-label="Redraw curve freehand"
+              className="nodrag rounded p-0.5 text-white/80 hover:bg-white/20 hover:text-white"
+            >
+              <IconPencil className="h-3 w-3" />
+            </button>
+          )}
           {d.duplicateNode && (
             <button
               onClick={() => d.duplicateNode?.(id)}
@@ -96,50 +115,52 @@ export function GraphNode({ data, id }: NodeProps) {
       {/* Params */}
       {def.params.length > 0 && (
         <div className="space-y-1 border-t border-bamboo-100 p-2">
-          {def.params.map((param) => (
-            <label key={param.key} className="flex items-center justify-between gap-2">
-              <span className="text-bamboo-600">{param.label}</span>
-              {param.multiline ? (
-                <textarea
-                  className="nodrag nowheel h-20 w-28 resize-y rounded border border-bamboo-200 px-1 py-0.5 font-mono text-[10px] leading-tight"
-                  value={String(d.params[param.key] ?? "")}
-                  onChange={(e) => d.updateParam(id, param.key, e.target.value)}
-                  spellCheck={false}
-                />
-              ) : param.dynamic ? (
-                <select
-                  className="w-24 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
-                  value={String(d.params[param.key] ?? "")}
-                  onChange={(e) => d.updateParam(id, param.key, e.target.value)}
-                >
-                  <option value="">{param.dynamic === "joints" ? "Unspecified" : "Custom"}</option>
-                  {((param.dynamic === "joints" ? d.jointOptions : d.speciesOptions) ?? []).map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              ) : param.options ? (
-                <select
-                  className="w-20 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
-                  value={String(d.params[param.key] ?? param.default)}
-                  onChange={(e) => d.updateParam(id, param.key, e.target.value)}
-                >
-                  {param.options.map((o) => (
-                    <option key={o} value={o}>{o}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="number"
-                  className="w-20 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
-                  value={Number(d.params[param.key] ?? param.default)}
-                  min={param.min}
-                  max={param.max}
-                  step={param.step ?? 1}
-                  onChange={(e) => d.updateParam(id, param.key, parseFloat(e.target.value))}
-                />
-              )}
-            </label>
-          ))}
+          {def.params.map((param) =>
+            typeof param.default === "number" ? (
+              <ParamSlider
+                key={param.key}
+                label={param.label}
+                value={numericValue(d.params[param.key], param)}
+                min={param.min ?? 0}
+                max={param.max ?? 100}
+                step={param.step ?? 1}
+                onChange={(v) => d.updateParam(id, param.key, v)}
+              />
+            ) : (
+              <label key={param.key} className="flex items-center justify-between gap-2">
+                <span className="text-bamboo-600">{param.label}</span>
+                {param.multiline ? (
+                  <textarea
+                    className="nodrag nowheel h-20 w-28 resize-y rounded border border-bamboo-200 px-1 py-0.5 font-mono text-[10px] leading-tight"
+                    value={String(d.params[param.key] ?? "")}
+                    onChange={(e) => d.updateParam(id, param.key, e.target.value)}
+                    spellCheck={false}
+                  />
+                ) : param.dynamic ? (
+                  <select
+                    className="w-24 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
+                    value={String(d.params[param.key] ?? "")}
+                    onChange={(e) => d.updateParam(id, param.key, e.target.value)}
+                  >
+                    <option value="">{param.dynamic === "joints" ? "Unspecified" : "Custom"}</option>
+                    {((param.dynamic === "joints" ? d.jointOptions : d.speciesOptions) ?? []).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    className="w-20 rounded border border-bamboo-200 px-1 py-0.5 nodrag"
+                    value={String(d.params[param.key] ?? param.default)}
+                    onChange={(e) => d.updateParam(id, param.key, e.target.value)}
+                  >
+                    {(param.options ?? []).map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                )}
+              </label>
+            ),
+          )}
         </div>
       )}
 

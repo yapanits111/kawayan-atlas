@@ -130,9 +130,9 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     type: "point", label: "Point", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "points", kind: "points" }],
     params: [
-      { key: "x", label: "x", default: 0, step: 0.1 },
-      { key: "y", label: "y", default: 0, step: 0.1 },
-      { key: "z", label: "z", default: 0, step: 0.1 },
+      { key: "x", label: "x", default: 0, min: -20, max: 20, step: 0.1 },
+      { key: "y", label: "y", default: 0, min: -20, max: 20, step: 0.1 },
+      { key: "z", label: "z", default: 0, min: -20, max: 20, step: 0.1 },
     ],
     compute: (_i, p) => ({ out: [[num(p, "x"), num(p, "y"), num(p, "z")] as Vec3] }),
   },
@@ -140,36 +140,39 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     type: "line", label: "Line", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
     params: [
-      { key: "ax", label: "A.x", default: -2, step: 0.1 }, { key: "ay", label: "A.y", default: 0, step: 0.1 }, { key: "az", label: "A.z", default: 0, step: 0.1 },
-      { key: "bx", label: "B.x", default: 2, step: 0.1 }, { key: "by", label: "B.y", default: 0, step: 0.1 }, { key: "bz", label: "B.z", default: 0, step: 0.1 },
+      { key: "ax", label: "A.x", default: -2, min: -20, max: 20, step: 0.1 }, { key: "ay", label: "A.y", default: 0, min: -20, max: 20, step: 0.1 }, { key: "az", label: "A.z", default: 0, min: -20, max: 20, step: 0.1 },
+      { key: "bx", label: "B.x", default: 2, min: -20, max: 20, step: 0.1 }, { key: "by", label: "B.y", default: 0, min: -20, max: 20, step: 0.1 }, { key: "bz", label: "B.z", default: 0, min: -20, max: 20, step: 0.1 },
     ],
     compute: (_i, p) => ({ out: G.line([num(p, "ax"), num(p, "ay"), num(p, "az")], [num(p, "bx"), num(p, "by"), num(p, "bz")], 2) }),
   },
+  // The type id stays "polyline" so saved graphs keep loading; it is a cardinal spline
+  // through its control points (straight polyline at smoothing 0 or tension 1).
   polyline: {
-    type: "polyline", label: "Polyline (curve)", category: "Geometry",
+    type: "polyline", label: "Spline (curve)", category: "Geometry",
     inputs: [{ id: "in", label: "points", kind: "points" }],
     outputs: [{ id: "out", label: "curve", kind: "curve" }],
     params: [
       { key: "pts", label: "points", multiline: true, default: DEFAULT_POLY },
       { key: "closed", label: "closed", default: "no", options: ["no", "yes"] },
-      { key: "smooth", label: "smooth", default: 12, min: 0, max: 40, step: 1 },
+      { key: "smooth", label: "smoothing", default: 12, min: 0, max: 40, step: 1 },
+      { key: "tension", label: "tension", default: 0, min: 0, max: 1, step: 0.05 },
     ],
     compute: (i, p) => {
       // A wired-in point list (from grid, divide, intersect …) wins; otherwise thread the
-      // curve through the hand-typed list — so you can draw a form by hand or fit one to
-      // computed points (§4, §7).
+      // curve through the typed / freehand-drawn list — so you can sketch a form by hand
+      // or fit one to computed points (§4, §7).
       const wired = Array.isArray(i.in) && i.in.length && isVec3(i.in[0]) ? (i.in as Vec3[]) : null;
       const pts = wired ?? G.parsePoints(String(p.pts ?? ""));
-      return { out: G.polyline(pts, p.closed === "yes", num(p, "smooth")) };
+      return { out: G.polyline(pts, p.closed === "yes", num(p, "smooth"), num(p, "tension")) };
     },
   },
   arc: {
     type: "arc", label: "Arc", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
     params: [
-      { key: "radius", label: "radius", default: 3, min: 0.1, step: 0.1 },
-      { key: "start", label: "start°", default: 0, step: 5 },
-      { key: "end", label: "end°", default: 180, step: 5 },
+      { key: "radius", label: "radius", default: 3, min: 0.1, max: 20, step: 0.1 },
+      { key: "start", label: "start°", default: 0, min: -360, max: 360, step: 5 },
+      { key: "end", label: "end°", default: 180, min: -360, max: 360, step: 5 },
       { key: "plane", label: "plane", default: "xz", options: ["xy", "xz", "yz"] },
       { key: "samples", label: "samples", default: 24, min: 2, max: 128, step: 1 },
     ],
@@ -181,8 +184,8 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     params: [
       { key: "cols", label: "cols", default: 4, min: 1, max: 40, step: 1 },
       { key: "rows", label: "rows", default: 4, min: 1, max: 40, step: 1 },
-      { key: "sx", label: "spacing X", default: 1, min: 0.1, step: 0.1 },
-      { key: "sy", label: "spacing Y", default: 1, min: 0.1, step: 0.1 },
+      { key: "sx", label: "spacing X", default: 1, min: 0.1, max: 10, step: 0.1 },
+      { key: "sy", label: "spacing Y", default: 1, min: 0.1, max: 10, step: 0.1 },
     ],
     compute: (_i, p) => ({ out: G.grid(num(p, "cols"), num(p, "rows"), num(p, "sx"), num(p, "sy")) }),
   },
@@ -190,7 +193,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     type: "circle", label: "Circle", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
     params: [
-      { key: "radius", label: "radius", default: 2, min: 0.1, step: 0.1 },
+      { key: "radius", label: "radius", default: 2, min: 0.1, max: 20, step: 0.1 },
       { key: "plane", label: "plane", default: "xz", options: ["xy", "xz", "yz"] },
       { key: "seg", label: "segments", default: 32, min: 3, max: 128, step: 1 },
     ],
@@ -200,8 +203,8 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     type: "rectangle", label: "Rectangle", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "curve", kind: "curve" }],
     params: [
-      { key: "w", label: "width", default: 3, min: 0.1, step: 0.1 },
-      { key: "d", label: "depth", default: 3, min: 0.1, step: 0.1 },
+      { key: "w", label: "width", default: 3, min: 0.1, max: 30, step: 0.1 },
+      { key: "d", label: "depth", default: 3, min: 0.1, max: 30, step: 0.1 },
       { key: "plane", label: "plane", default: "xz", options: ["xy", "xz", "yz"] },
     ],
     compute: (_i, p) => ({ out: G.rectangle(num(p, "w"), num(p, "d"), p.plane as "xy" | "xz" | "yz") }),
@@ -211,7 +214,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [{ id: "in", label: "points", kind: "points" }],
     outputs: [{ id: "out", label: "curves", kind: "curves" }],
     params: [
-      { key: "height", label: "height", default: 2.5, step: 0.1 },
+      { key: "height", label: "height", default: 2.5, min: -20, max: 20, step: 0.1 },
       { key: "axis", label: "axis", default: "y", options: ["x", "y", "z"] },
     ],
     compute: (i, p) => {
@@ -264,9 +267,9 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [{ id: "in", label: "geometry", kind: "curves" }],
     outputs: [{ id: "out", label: "geometry", kind: "curves" }],
     params: [
-      { key: "tx", label: "move X", default: 0, step: 0.1 }, { key: "ty", label: "move Y", default: 0, step: 0.1 }, { key: "tz", label: "move Z", default: 0, step: 0.1 },
-      { key: "rx", label: "rot X°", default: 0, step: 5 }, { key: "ry", label: "rot Y°", default: 0, step: 5 }, { key: "rz", label: "rot Z°", default: 0, step: 5 },
-      { key: "s", label: "scale", default: 1, min: 0.01, step: 0.05 },
+      { key: "tx", label: "move X", default: 0, min: -20, max: 20, step: 0.1 }, { key: "ty", label: "move Y", default: 0, min: -20, max: 20, step: 0.1 }, { key: "tz", label: "move Z", default: 0, min: -20, max: 20, step: 0.1 },
+      { key: "rx", label: "rot X°", default: 0, min: -180, max: 180, step: 5 }, { key: "ry", label: "rot Y°", default: 0, min: -180, max: 180, step: 5 }, { key: "rz", label: "rot Z°", default: 0, min: -180, max: 180, step: 5 },
+      { key: "s", label: "scale", default: 1, min: 0.05, max: 10, step: 0.05 },
     ],
     compute: (i, p) => {
       const t: Vec3 = [num(p, "tx"), num(p, "ty"), num(p, "tz")];
@@ -284,7 +287,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     outputs: [{ id: "out", label: "items", kind: "curves" }],
     params: [
       { key: "count", label: "count", default: 3, min: 1, max: 100, step: 1 },
-      { key: "dx", label: "step X", default: 0, step: 0.1 }, { key: "dy", label: "step Y", default: 0, step: 0.1 }, { key: "dz", label: "step Z", default: 1, step: 0.1 },
+      { key: "dx", label: "step X", default: 0, min: -10, max: 10, step: 0.1 }, { key: "dy", label: "step Y", default: 0, min: -10, max: 10, step: 0.1 }, { key: "dz", label: "step Z", default: 1, min: -10, max: 10, step: 0.1 },
     ],
     compute: (i, p) => replicate(i.in, num(p, "count"), (k) => ({ t: [num(p, "dx") * k, num(p, "dy") * k, num(p, "dz") * k] as Vec3, r: [0, 0, 0] })),
   },
@@ -294,7 +297,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     outputs: [{ id: "out", label: "items", kind: "curves" }],
     params: [
       { key: "count", label: "count", default: 6, min: 1, max: 100, step: 1 },
-      { key: "total", label: "sweep°", default: 360, step: 15 },
+      { key: "total", label: "sweep°", default: 360, min: -360, max: 360, step: 15 },
       { key: "axis", label: "axis", default: "y", options: ["x", "y", "z"] },
     ],
     compute: (i, p) => {
@@ -312,8 +315,8 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     type: "weave", label: "Weave", category: "Geometry",
     inputs: [], outputs: [{ id: "out", label: "curves", kind: "curves" }],
     params: [
-      { key: "w", label: "width", default: 3, min: 0.2, step: 0.1 },
-      { key: "h", label: "height", default: 2.4, min: 0.2, step: 0.1 },
+      { key: "w", label: "width", default: 3, min: 0.2, max: 20, step: 0.1 },
+      { key: "h", label: "height", default: 2.4, min: 0.2, max: 20, step: 0.1 },
       { key: "u", label: "warp", default: 8, min: 1, max: 60, step: 1 },
       { key: "v", label: "weft", default: 7, min: 1, max: 60, step: 1 },
       { key: "plane", label: "plane", default: "xy", options: ["xy", "xz", "yz"] },
@@ -329,7 +332,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { id: "b", label: "curves B", kind: "curves" },
     ],
     outputs: [{ id: "out", label: "points", kind: "points" }],
-    params: [{ key: "tol", label: "tolerance (m)", default: 0.02, min: 0.001, step: 0.005 }],
+    params: [{ key: "tol", label: "tolerance (m)", default: 0.02, min: 0.005, max: 0.5, step: 0.005 }],
     compute: (i, p) => ({ out: G.intersectCurves(curvesOf(i.a), curvesOf(i.b), num(p, "tol")) }),
   },
   offset: {
@@ -337,7 +340,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [{ id: "in", label: "curves", kind: "curves" }],
     outputs: [{ id: "out", label: "curves", kind: "curves" }],
     params: [
-      { key: "dist", label: "distance (m)", default: 0.4, step: 0.05 },
+      { key: "dist", label: "distance (m)", default: 0.4, min: -5, max: 5, step: 0.05 },
       { key: "plane", label: "plane", default: "xy", options: ["xy", "xz", "yz"] },
     ],
     compute: (i, p) => ({
@@ -350,10 +353,10 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     outputs: [{ id: "out", label: "elements", kind: "elements" }],
     params: [
       { key: "species", label: "species", default: "", dynamic: "species" },
-      { key: "d0", label: "Ø start (mm)", default: 90, min: 5, step: 1 },
-      { key: "d1", label: "Ø end (mm)", default: 75, min: 5, step: 1 },
-      { key: "wall", label: "wall (mm)", default: 12, min: 1, step: 1 },
-      { key: "nodes", label: "node spacing (m)", default: 0.3, min: 0, step: 0.05 },
+      { key: "d0", label: "Ø start (mm)", default: 90, min: 5, max: 300, step: 1 },
+      { key: "d1", label: "Ø end (mm)", default: 75, min: 5, max: 300, step: 1 },
+      { key: "wall", label: "wall (mm)", default: 12, min: 1, max: 40, step: 1 },
+      { key: "nodes", label: "node spacing (m)", default: 0.3, min: 0, max: 1, step: 0.01 },
     ],
     compute: (i, p, ctx) => {
       const curves = asCurves(i.in);
@@ -381,8 +384,8 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [{ id: "in", label: "curve/points", kind: "curves" }],
     outputs: [{ id: "out", label: "elements", kind: "elements" }],
     params: [
-      { key: "w", label: "width (mm)", default: 25, min: 2, step: 1 },
-      { key: "t", label: "thick (mm)", default: 6, min: 1, step: 1 },
+      { key: "w", label: "width (mm)", default: 25, min: 2, max: 200, step: 1 },
+      { key: "t", label: "thick (mm)", default: 6, min: 1, max: 30, step: 1 },
     ],
     compute: (i, p, ctx) => {
       const curves = asCurves(i.in);
@@ -403,7 +406,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { id: "nodes", label: "node points", kind: "points" },
     ],
     params: [
-      { key: "spacing", label: "node spacing (m)", default: 0.3, min: 0.02, step: 0.01 },
+      { key: "spacing", label: "node spacing (m)", default: 0.3, min: 0.02, max: 2, step: 0.01 },
       { key: "mode", label: "mode", default: "mark", options: ["mark", "split"] },
     ],
     compute: (i, p) => {
@@ -453,8 +456,8 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [{ id: "in", label: "curve/points", kind: "curves" }],
     outputs: [{ id: "out", label: "elements", kind: "elements" }],
     params: [
-      { key: "w", label: "width (mm)", default: 60, min: 5, step: 1 },
-      { key: "ply", label: "ply thick (mm)", default: 6, min: 0.5, step: 0.5 },
+      { key: "w", label: "width (mm)", default: 60, min: 5, max: 400, step: 1 },
+      { key: "ply", label: "ply thick (mm)", default: 6, min: 0.5, max: 20, step: 0.5 },
       { key: "layers", label: "layers", default: 5, min: 2, max: 40, step: 1 },
       { key: "layup", label: "layup", default: "parallel", options: ["parallel", "alternating"] },
     ],
@@ -490,7 +493,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { key: "mode", label: "typing", default: "auto", options: ["auto", "manual"] },
       { key: "type", label: "type (manual)", default: "", dynamic: "joints" },
       { key: "splice", label: "splice° (bolt ≥)", default: 150, min: 90, max: 180, step: 5 },
-      { key: "tol", label: "tolerance (m)", default: 0.05, min: 0.001, step: 0.01 },
+      { key: "tol", label: "tolerance (m)", default: 0.05, min: 0.01, max: 1, step: 0.01 },
     ],
     compute: (i, p) => {
       const els = asElements(i.in);
@@ -594,7 +597,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
     inputs: [], outputs: [{ id: "out", label: "load", kind: "number" }],
     params: [
       { key: "kind", label: "type", default: "distributed", options: ["distributed", "point"] },
-      { key: "value", label: "value (kN)", default: 1, min: 0, step: 0.5 },
+      { key: "value", label: "value (kN)", default: 1, min: 0, max: 100, step: 0.5 },
     ],
     compute: (_i, p) => ({ out: num(p, "value") }),
   },
@@ -615,7 +618,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { id: "out", label: "elements", kind: "elements" },
       { id: "checks", label: "checks", kind: "checks" },
     ],
-    params: [{ key: "slenderness", label: "L/Ø limit", default: 30, min: 5, step: 1 }],
+    params: [{ key: "slenderness", label: "L/Ø limit", default: 30, min: 5, max: 150, step: 1 }],
     compute: (i, p) => {
       const els = asElements(i.in);
       const limit = num(p, "slenderness");
@@ -672,7 +675,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       { id: "joints", label: "joints", kind: "joints" },
     ],
     outputs: [{ id: "out", label: "schedule", kind: "schedule" }],
-    params: [{ key: "usable", label: "usable culm (m)", default: 6, min: 1, step: 0.5 }],
+    params: [{ key: "usable", label: "usable culm (m)", default: 6, min: 1, max: 20, step: 0.5 }],
     compute: (i, p) => {
       const els = asElements(i.in);
       const rows: ScheduleRow[] = els.map((e, idx) => ({
@@ -767,8 +770,8 @@ export const NODE_DEFS: Record<string, NodeDef> = {
         multiline: true,
         default: DEFAULT_POLES,
       },
-      { key: "kerf", label: "saw kerf (m)", default: 0.01, min: 0, step: 0.005 },
-      { key: "tol", label: "Ø tolerance (mm)", default: 5, min: 0, step: 1 },
+      { key: "kerf", label: "saw kerf (m)", default: 0.01, min: 0, max: 0.1, step: 0.005 },
+      { key: "tol", label: "Ø tolerance (mm)", default: 5, min: 0, max: 50, step: 1 },
     ],
     compute: (i, p) => {
       const els = asElements(i.in);

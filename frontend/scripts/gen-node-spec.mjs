@@ -40,6 +40,20 @@ const DYNAMIC_SOURCE = {
 const io = (ports) =>
   ports.length ? ports.map((p) => `\`${p.id}\` ${p.label} *(${p.kind})*`).join(" · ") : "—";
 
+// A table cell can't hold line breaks, so a multi-line default (spline points, a pole list)
+// is summarised as its entry count plus the first entry.
+function formatDefault(p) {
+  if (p.default === "") return "`(none)`";
+  if (p.multiline) {
+    const rows = String(p.default)
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("#"));
+    return rows.length ? `${rows.length} lines, e.g. \`${rows[0]}\`` : "`(empty)`";
+  }
+  return `\`${p.default}\``;
+}
+
 const out = [];
 for (const cat of CATEGORIES) {
   out.push(`\n### ${cat}\n`);
@@ -55,10 +69,16 @@ for (const cat of CATEGORIES) {
           ? p.options.map((o) => `\`${o}\``).join(" / ")
           : p.dynamic
             ? DYNAMIC_SOURCE[p.dynamic] ?? `from the ${p.dynamic} API`
-            : [p.min !== undefined ? `min ${p.min}` : null, p.max !== undefined ? `max ${p.max}` : null]
-                .filter(Boolean)
-                .join(", ") || "—";
-        out.push(`| **${p.key}** | ${p.label} | \`${p.default === "" ? "(none)" : p.default}\` | ${range} |`);
+            : p.multiline
+              ? "free text, one entry per line"
+              : [
+                  p.min !== undefined ? `min ${p.min}` : null,
+                  p.max !== undefined ? `max ${p.max}` : null,
+                  p.step !== undefined ? `step ${p.step}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "—";
+        out.push(`| **${p.key}** | ${p.label} | ${formatDefault(p)} | ${range} |`);
       }
     } else {
       out.push(`\n*No parameters.*`);

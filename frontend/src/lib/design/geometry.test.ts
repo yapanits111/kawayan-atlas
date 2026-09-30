@@ -138,6 +138,33 @@ describe("polyline (freeform curve)", () => {
     const c = G.polyline(square, true, 5);
     expect(c.points[0]).toEqual(c.points[c.points.length - 1]);
   });
+
+  const peak: Vec3[] = [[0, 0, 0], [1, 1, 0], [2, 0, 0]];
+
+  it("tension 0 is the classic Catmull-Rom spline", () => {
+    // midpoint of the first span, hand-computed from the Catmull-Rom basis
+    const mid = G.polyline(peak, false, 1, 0).points[1];
+    expect(mid[0]).toBeCloseTo(0.4375, 9);
+    expect(mid[1]).toBeCloseTo(0.5625, 9);
+  });
+
+  it("tension 1 pulls the spline taut onto straight chords", () => {
+    const c = G.polyline(peak, false, 6, 1);
+    // every sample lies on the control polygon y = min(x, 2 - x)
+    for (const [x, y] of c.points) expect(y).toBeCloseTo(Math.min(x, 2 - x), 9);
+  });
+
+  it("intermediate tension sits between round and taut", () => {
+    const round = G.polyline(peak, false, 1, 0).points[1][1];
+    const half = G.polyline(peak, false, 1, 0.5).points[1][1];
+    const taut = G.polyline(peak, false, 1, 1).points[1][1];
+    expect(half).toBeLessThan(round);
+    expect(half).toBeGreaterThan(taut);
+  });
+
+  it("a missing (NaN) tension from an older saved graph falls back to the round spline", () => {
+    expect(G.polyline(peak, false, 3, NaN).points).toEqual(G.polyline(peak, false, 3).points);
+  });
 });
 
 describe("curveLength", () => {

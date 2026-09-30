@@ -87,11 +87,13 @@ export function parsePoints(text: string): Vec3[] {
   return out;
 }
 
-/** One point on a uniform Catmull-Rom spline segment p1→p2 (p0,p3 are the neighbours). */
-function catmull(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: number): Vec3 {
+/** One point on a cardinal spline segment p1→p2 (p0,p3 are the neighbours), in Hermite
+ *  form. `k` scales the tangents: 0.5 is the classic Catmull-Rom, 0 gives straight chords. */
+function cardinal(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: number, k: number): Vec3 {
   const t2 = t * t, t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
   const f = (a: number, b: number, c: number, d: number) =>
-    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+    h00 * b + h10 * k * (c - a) + h01 * c + h11 * k * (d - b);
   return [
     f(p0[0], p1[0], p2[0], p3[0]),
     f(p0[1], p1[1], p2[1], p3[1]),
@@ -101,16 +103,20 @@ function catmull(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: number): Vec3 {
 
 /** A freeform curve through an ordered point list — the whitepaper's Layer-1 "curve"
  *  primitive (§7), the thing that lets a user model forms that have no name (§4). Optionally
- *  closed (the last control point joins the first) and optionally smoothed with a Catmull-Rom
+ *  closed (the last control point joins the first) and optionally smoothed with a cardinal
  *  spline so real culm/arch curvature survives rather than a faceted polygon. `smooth` is the
- *  number of samples inserted between each pair of control points (0 = straight segments).
+ *  number of samples inserted between each pair of control points (0 = straight segments);
+ *  `tension` runs from 0 (round Catmull-Rom) to 1 (taut, straight between points).
  *  The spline passes through every control point. */
-export function polyline(pts: Vec3[], closed = false, smooth = 0): Curve {
+export function polyline(pts: Vec3[], closed = false, smooth = 0, tension = 0): Curve {
   const ctrl = pts.slice();
   if (ctrl.length < 2) return { points: ctrl };
   const between = Math.max(0, Math.floor(smooth));
   if (between < 1) return { points: closed ? [...ctrl, ctrl[0]] : ctrl };
 
+  // Older saved graphs carry no tension param (NaN) — treat as the default round spline.
+  const tn = Number.isFinite(tension) ? Math.min(1, Math.max(0, tension)) : 0;
+  const k = 0.5 * (1 - tn);
   const n = ctrl.length;
   const div = between + 1;
   const P = (i: number): Vec3 =>
@@ -119,7 +125,7 @@ export function polyline(pts: Vec3[], closed = false, smooth = 0): Curve {
   const segs = closed ? n : n - 1;
   for (let i = 0; i < segs; i++) {
     const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
-    for (let s = 0; s < div; s++) points.push(catmull(p0, p1, p2, p3, s / div));
+    for (let s = 0; s < div; s++) points.push(cardinal(p0, p1, p2, p3, s / div, k));
   }
   points.push(closed ? P(0) : P(n - 1));
   return { points };
