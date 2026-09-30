@@ -52,8 +52,8 @@ export function GraphNode({ data, id }: NodeProps) {
           {d.type === "polyline" && d.openDraw && (
             <button
               onClick={() => d.openDraw?.(id)}
-              title="Redraw this curve freehand"
-              aria-label="Redraw curve freehand"
+              title="Edit this curve on the draw pad: drag, add or remove points, move its plane, or redraw it"
+              aria-label="Edit curve on the draw pad"
               className="nodrag rounded p-0.5 text-white/80 hover:bg-white/20 hover:text-white"
             >
               <IconPencil className="h-3 w-3" />

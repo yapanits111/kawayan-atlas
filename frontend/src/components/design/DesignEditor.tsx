@@ -17,22 +17,27 @@ import {
 } from "@xyflow/react";
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
-import { tubeGeometry, stripGeometry } from "@/lib/design/geometry";
+import { tubeGeometry, stripGeometry, parsePoints } from "@/lib/design/geometry";
+import { fitPlane, setPointInText } from "@/lib/design/freehand";
+import type { Curve, Vec3 } from "@/lib/design/types";
 import { useAuth } from "@/components/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { IconPencil } from "@/components/icons";
 import { GraphNode } from "./GraphNode";
 import { NoteNode } from "./NoteNode";
-import { Viewport3D } from "./Viewport3D";
+import { Viewport3D, type SplineEdit } from "./Viewport3D";
 import { OutputPanel } from "./OutputPanel";
 import { AddNodeMenu } from "./AddNodeMenu";
-import { DrawPad, type DrawResult } from "./DrawPad";
+import { DrawPad, type DrawPreview, type DrawResult } from "./DrawPad";
 import { NODE_DEFS } from "@/lib/design/nodeDefs";
 import { evaluateGraph } from "@/lib/design/evaluate";
 import { EXAMPLES } from "@/lib/design/examples";
 import { api } from "@/lib/api";
 
 const STORAGE_KEY = "kawayan-design-graph";
+
+type Params = Record<string, number | string>;
+const paramsOf = (n: Node | undefined) => (n?.data as { params?: Params } | undefined)?.params;
 
 /** Strip React Flow's runtime fields down to the essentials we persist. */
 function serialize(nodes: Node[], edges: Edge[]) {
@@ -103,8 +108,15 @@ export function DesignEditor() {
   const [savedToAccount, setSavedToAccount] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  // Freehand draw pad: open for a new spline (targetId null) or to redraw an existing one.
+  // Draw pad: open for a new spline (targetId null) or to edit an existing one in place.
   const [draw, setDraw] = useState<{ targetId: string | null } | null>(null);
+  const drawOpen = draw !== null;
+  const drawTarget = useRef<string | null>(null); // mirrors draw.targetId for stable callbacks
+  const drawOrig = useRef<Params | null>(null); // the edited spline's params, for Cancel
+  const [ghost, setGhost] = useState<DrawPreview | null>(null); // the pad's plane + curve, in 3D
+  const [dragging3d, setDragging3d] = useState(false); // a control point is being dragged in 3D
+  const nodesRef = useRef<Node[]>(nodes);
+  nodesRef.current = nodes;
   const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   // The currently-loaded saved graph (from a share/gallery link or a prior save this
@@ -207,9 +219,11 @@ export function DesignEditor() {
   }, [nodes, edges]);
 
   // Undo/redo history (debounced snapshots). Restoring a snapshot re-matches the
-  // stored string, so the recorder naturally skips re-recording it.
+  // stored string, so the recorder naturally skips re-recording it. Paused while a point is
+  // dragged in 3D or the draw pad is open, so a whole drag or pad session is one undo step
+  // (and a cancelled pad session, restored exactly, is none).
   useEffect(() => {
-    if (!restored.current) return;
+    if (!restored.current || drawOpen || dragging3d) return;
     const t = setTimeout(() => {
       const snap = JSON.stringify(serialize(nodes, edges));
       const h = history.current;
@@ -222,7 +236,7 @@ export function DesignEditor() {
       setCanRedo(false);
     }, 400);
     return () => clearTimeout(t);
-  }, [nodes, edges]);
+  }, [nodes, edges, drawOpen, dragging3d]);
 
   const updateParam = useCallback(
     (nodeId: string, key: string, value: number | string) => {
@@ -334,7 +348,73 @@ export function DesignEditor() {
     [setNodes],
   );
 
-  const openDraw = useCallback((targetId?: string) => setDraw({ targetId: targetId ?? null }), []);
+  // Param edits from the 3D handles and the draw pad land at most once per animation frame,
+  // so a fast drag re-evaluates the graph at screen rate rather than on every pointer event.
+  const pendingEdits = useRef(new Map<string, ((p: Params) => Params)[]>());
+  const editFrame = useRef<number | null>(null);
+  const flushEdits = useCallback(() => {
+    if (editFrame.current !== null) cancelAnimationFrame(editFrame.current);
+    editFrame.current = null;
+    const batch = pendingEdits.current;
+    if (!batch.size) return;
+    pendingEdits.current = new Map();
+    setNodes((ns) =>
+      ns.map((n) => {
+        const fns = batch.get(n.id);
+        if (!fns) return n;
+        return { ...n, data: { ...n.data, params: fns.reduce((p, f) => f(p), paramsOf(n) ?? {}) } };
+      }),
+    );
+  }, [setNodes]);
+  const queueEdit = useCallback(
+    (nodeId: string, fn: (p: Params) => Params) => {
+      pendingEdits.current.set(nodeId, [...(pendingEdits.current.get(nodeId) ?? []), fn]);
+      if (editFrame.current === null) editFrame.current = requestAnimationFrame(flushEdits);
+    },
+    [flushEdits],
+  );
+  const dropEdits = useCallback(() => {
+    if (editFrame.current !== null) cancelAnimationFrame(editFrame.current);
+    editFrame.current = null;
+    pendingEdits.current = new Map();
+  }, []);
+  useEffect(() => dropEdits, [dropEdits]); // nothing lands after unmount
+
+  const openDraw = useCallback((targetId?: string) => {
+    const id = targetId ?? null;
+    const p = id ? paramsOf(nodesRef.current.find((n) => n.id === id)) : undefined;
+    drawTarget.current = id;
+    drawOrig.current = p ? { ...p } : null;
+    setDraw({ targetId: id });
+  }, []);
+
+  // A dragged 3D handle rewrites only its own line of the spline's point text.
+  const movePoint = useCallback(
+    (nodeId: string, index: number, p: Vec3) =>
+      queueEdit(nodeId, (params) => ({ ...params, pts: setPointInText(String(params.pts ?? ""), index, p) })),
+    [queueEdit],
+  );
+  const onDragging = useCallback(
+    (on: boolean) => {
+      if (!on) flushEdits();
+      setDragging3d(on);
+    },
+    [flushEdits],
+  );
+
+  // The pad's live state is shown in 3D and, when it is editing an existing spline, applied to
+  // that spline as you go — so its culms and the cut-list follow the edit.
+  const onDrawPreview = useCallback(
+    (p: DrawPreview) => {
+      setGhost(p);
+      const id = drawTarget.current;
+      const r = p.result;
+      if (id && p.dirty && r) {
+        queueEdit(id, (params) => ({ ...params, pts: r.pts, smooth: r.smooth, tension: r.tension, closed: r.closed }));
+      }
+    },
+    [queueEdit],
+  );
 
   // Inject the right handlers per node kind, and keep notes stacked below the graph nodes.
   const rfNodes = useMemo<Node[]>(
@@ -362,11 +442,29 @@ export function DesignEditor() {
     return { x: c.x - 230, y: c.y - 120 };
   }
 
-  /** A finished drawing either replaces a spline's points (redraw) or becomes a new Spline
+  function closeDraw() {
+    dropEdits();
+    drawTarget.current = null;
+    drawOrig.current = null;
+    setGhost(null);
+    setDraw(null);
+  }
+
+  /** Cancel puts an edited spline back exactly as it was when the pad opened. */
+  function cancelDraw() {
+    const id = drawTarget.current;
+    const orig = drawOrig.current;
+    closeDraw();
+    if (id && orig) {
+      setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, params: orig } } : n)));
+    }
+  }
+
+  /** A finished drawing either sets an edited spline's points or becomes a new Spline
    *  node — optionally already wired into a Culm/Strip so it shows up in 3D straight away. */
   function applyDrawing(r: DrawResult) {
-    const targetId = draw?.targetId ?? null;
-    setDraw(null);
+    const targetId = drawTarget.current;
+    closeDraw();
     const curveParams = { pts: r.pts, smooth: r.smooth, tension: r.tension, closed: r.closed };
 
     if (targetId) {
@@ -544,7 +642,6 @@ export function DesignEditor() {
   // Keyboard: Ctrl/Cmd+Z undo, +Shift+Z / +Y redo, +C copy selection, +V paste
   // (all suppressed while typing in a field, so native copy/paste still works there, and
   // while the draw pad is open, so shortcuts can't edit the graph hidden behind it).
-  const drawOpen = draw !== null;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (drawOpen) return;
@@ -580,6 +677,21 @@ export function DesignEditor() {
       }));
     return evaluateGraph(evalNodes, edges);
   }, [nodes, edges]);
+
+  // Selected Spline nodes that own their points (not wired in) get draggable handles in 3D.
+  const splineEdits = useMemo<SplineEdit[]>(() => {
+    if (drawOpen) return []; // the pad does the editing while it is open
+    const wired = new Set(edges.filter((e) => e.targetHandle === "in").map((e) => e.target));
+    return nodes
+      .filter((n) => n.selected && n.type !== "note" && (n.data as { type?: string }).type === "polyline" && !wired.has(n.id))
+      .slice(0, 8)
+      .map((n) => {
+        const ctrl = parsePoints(String(paramsOf(n)?.pts ?? ""));
+        const fit = fitPlane(ctrl);
+        const out = result.outputs[n.id]?.out as Curve | undefined;
+        return { nodeId: n.id, ctrl, curve: out?.points ?? [], normal: ctrl.length >= 3 && fit.planar ? fit.normal : null };
+      });
+  }, [nodes, edges, result, drawOpen]);
 
   function exportGLB() {
     const group = new THREE.Group();
@@ -639,8 +751,12 @@ export function DesignEditor() {
         <span className="hidden text-xs text-bamboo-600 2xl:inline">
           drag to connect · shift-select, Ctrl/⌘ C/V to copy, Del to remove
         </span>
-        {/* Buttons never break mid-label; on narrow screens whole buttons wrap to a new row. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2 whitespace-nowrap">
+        {/* Buttons never break mid-label; on narrow screens whole buttons wrap to a new row.
+            Locked while the draw pad is open, so nothing reloads the graph under an edit. */}
+        <fieldset
+          disabled={drawOpen}
+          className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 whitespace-nowrap disabled:opacity-50"
+        >
           <select
             className="w-36 rounded-md border border-bamboo-300 bg-white px-3 py-1.5 text-sm"
             value=""
@@ -748,11 +864,12 @@ export function DesignEditor() {
                   <li><strong>Ctrl/⌘ C</strong> / <strong>V</strong> — copy / paste selection</li>
                   <li><strong>Del</strong> / <strong>Backspace</strong> — remove selection</li>
                   <li><strong>Ctrl/⌘ Z</strong> — undo · <strong>Ctrl/⌘ ⇧ Z</strong> — redo</li>
+                  <li>Select a <strong>Spline</strong> node to drag its points in the 3D view (<strong>Shift</strong>: straight up/down)</li>
                 </ul>
               </div>
             )}
           </div>
-        </div>
+        </fieldset>
       </div>
 
       {shareUrl && (
@@ -812,6 +929,24 @@ export function DesignEditor() {
             <Controls />
             <MiniMap pannable zoomable className="!bg-bamboo-50" />
           </ReactFlow>
+
+          {/* The pad docks over the graph (full screen on small displays), leaving the 3D view
+              beside it live: it shows the drawing plane, and follows an edit as it happens. */}
+          {draw && (
+            <DrawPad
+              mode={draw.targetId ? "edit" : "new"}
+              wiredInput={!!draw.targetId && edges.some((e) => e.target === draw.targetId && e.targetHandle === "in")}
+              initial={(() => {
+                const p = drawOrig.current;
+                return p
+                  ? { pts: parsePoints(String(p.pts ?? "")), smooth: Number(p.smooth), tension: Number(p.tension), closed: String(p.closed) }
+                  : undefined;
+              })()}
+              onPreview={onDrawPreview}
+              onCancel={cancelDraw}
+              onSubmit={applyDrawing}
+            />
+          )}
         </div>
 
         <div className="grid min-h-0 grid-rows-[1.4fr_1fr]">
@@ -822,6 +957,10 @@ export function DesignEditor() {
                 curves={result.scene.curves}
                 points={result.scene.points}
                 joints={result.scene.joints}
+                ghost={ghost}
+                edits={splineEdits}
+                onMovePoint={movePoint}
+                onDragging={onDragging}
               />
             </ErrorBoundary>
           </div>
@@ -830,25 +969,6 @@ export function DesignEditor() {
           </div>
         </div>
       </div>
-
-      {draw && (
-        <DrawPad
-          mode={draw.targetId ? "redraw" : "new"}
-          wiredInput={
-            !!draw.targetId && edges.some((e) => e.target === draw.targetId && e.targetHandle === "in")
-          }
-          initial={(() => {
-            const p = (nodes.find((n) => n.id === draw.targetId)?.data as
-              | { params?: Record<string, number | string> }
-              | undefined)?.params;
-            return p
-              ? { smooth: Number(p.smooth), tension: Number(p.tension), closed: String(p.closed) }
-              : undefined;
-          })()}
-          onCancel={() => setDraw(null)}
-          onSubmit={applyDrawing}
-        />
-      )}
     </div>
   );
 }

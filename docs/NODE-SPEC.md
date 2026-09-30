@@ -34,7 +34,9 @@ widths and ply thicknesses are millimetres; angles are degrees.
 **Controls.** Every numeric parameter is a slider in the editor; *Range* gives the slider's
 span and step (a saved value outside it stretches the track rather than being clamped). A
 Spline's points can be typed, wired in from any `points` output, or sketched with the
-**Draw** tool, which simplifies a freehand stroke into control points on a chosen plane.
+**Draw** tool, which simplifies a freehand stroke into control points on any plane (an axis
+plane, or one turned, pitched and moved). They can then be dragged in the 3D view while the
+node is selected, or edited point by point on the draw pad; both write back to `pts`.
 
 **The four layers** follow the whitepaper's dependency order (§6, §14): geometry is the
 foundation, the bamboo layer is thin and sits on top of it, output turns the model into a

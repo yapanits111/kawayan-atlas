@@ -16,6 +16,7 @@ export function ParamSlider({
   max,
   step,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -23,11 +24,12 @@ export function ParamSlider({
   max: number;
   step: number;
   onChange: (v: number) => void;
+  disabled?: boolean;
 }) {
   const lo = Math.min(min, value);
   const hi = Math.max(max, value);
   return (
-    <div className="space-y-0.5">
+    <div className={`space-y-0.5 ${disabled ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-2 text-[10px] leading-3">
         <span className="truncate text-bamboo-600">{label}</span>
         <span className="shrink-0 font-semibold tabular-nums text-bamboo-800">
@@ -41,8 +43,9 @@ export function ParamSlider({
         max={hi}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="nodrag nowheel h-3 w-full cursor-pointer accent-leaf-600"
+        className="nodrag nowheel h-3 w-full cursor-pointer accent-leaf-600 disabled:cursor-not-allowed"
       />
     </div>
   );

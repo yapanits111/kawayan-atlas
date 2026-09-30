@@ -40,11 +40,20 @@ excludes* engineered bamboo. Culms are tagged `iso22156-round`; strips and lamin
 tagged `outside-iso22156`, badged **no code** in the schedule, and carry a validation-status
 note into the exported PDF — modelled freely, never implied to be code-checked (§9).
 
-**Freehand drawing:** the **Draw** tool opens a sketch pad — draw a stroke on an elevation,
-plan or side plane and it is simplified to control points and smoothed into a **Spline** node
-(optionally already swept into a culm or strip), ready to wire into anything that takes a
-curve. The spline stays fully parametric: smoothing, tension, closed/open and its points are
-all editable on the node, and **Redraw** re-sketches it in place.
+**Freehand drawing:** the **Draw** tool opens a sketch pad — draw a stroke and it is
+simplified to control points and smoothed into a **Spline** node (optionally already swept
+into a culm or strip), ready to wire into anything that takes a curve. Draw on the elevation,
+plan or side plane, or on **any plane**: turn it about the vertical, pitch it from flat to
+upright, and move its origin — the 3D view shows the plane in place while you draw, so a
+diagonal arch, a second arch further back, or a roof-slope curve is one sketch away.
+
+**Editing points directly:** the spline stays fully parametric (smoothing, tension,
+closed/open and its points are all on the node), and its points can be reshaped by hand two
+ways. **Select a Spline node and drag its points in the 3D view** — a flat curve's points
+slide in its own plane, Shift moves one straight up or down, and the model and cut-list
+follow as you drag. Or open it on the **pad** (the pencil on the node): drag points, add one
+by double-clicking the curve, extend past an end, remove one, nudge with the arrow keys, move
+the whole plane, or redraw — live, with Cancel putting everything back.
 
 **Editor:** every numeric parameter is a **slider** with a live readout, so the model and the
 cut-list update as you drag. Plus live dependency-ordered re-evaluation, autosave + shareable
@@ -181,10 +190,12 @@ cd frontend && npm test
 cd frontend && npx tsc --noEmit && npm run build
 ```
 
-The Design Lab's pure core is unit-tested with [Vitest](https://vitest.dev/) (59 tests):
-the geometry kernel (`geometry.ts`), the dependency-ordered evaluation engine
-(`evaluate.ts`), and the pole-inventory reconciliation (`inventory.ts`). Run `npm run
-test:watch` for watch mode.
+The Design Lab's core is unit-tested with [Vitest](https://vitest.dev/): the geometry
+kernel (`geometry.ts`), the dependency-ordered evaluation engine (`evaluate.ts`), the
+pole-inventory reconciliation (`inventory.ts`), the drawing-plane and point-editing maths
+(`freehand.ts`), 3D point dragging (`drag.ts`), and the node registry — plus component tests
+(jsdom + Testing Library) for the node UI and the draw pad. Run `npm run test:watch` for
+watch mode.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the backend tests plus the
 frontend type-check and build on every push / PR (assumes `kawayan-atlas/` is the repo root).

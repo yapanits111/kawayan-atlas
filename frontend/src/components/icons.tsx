@@ -39,6 +39,16 @@ export const IconPencil = (p: IconProps) => (
   </Base>
 );
 
+/** Edit points — a curve through square handles. */
+export const IconHandles = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M5 17C8 7 16 7 19 17" />
+    <rect x="3.5" y="15.5" width="3" height="3" rx="0.6" />
+    <rect x="10.5" y="8" width="3" height="3" rx="0.6" />
+    <rect x="17.5" y="15.5" width="3" height="3" rx="0.6" />
+  </Base>
+);
+
 /** Check — a magnifier with a tick. */
 export const IconInspect = (p: IconProps) => (
   <Base {...p}>

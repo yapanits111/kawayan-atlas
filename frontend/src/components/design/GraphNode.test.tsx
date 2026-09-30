@@ -59,16 +59,16 @@ describe("GraphNode parameters", () => {
   });
 });
 
-describe("GraphNode spline redraw", () => {
-  it("offers a freehand Redraw on spline nodes", () => {
+describe("GraphNode spline editing", () => {
+  it("offers the draw pad on spline nodes", () => {
     const openDraw = vi.fn();
     renderNode("polyline", {}, { openDraw });
-    fireEvent.click(screen.getByRole("button", { name: "Redraw curve freehand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit curve on the draw pad" }));
     expect(openDraw).toHaveBeenCalledWith("n1");
   });
 
-  it("does not offer Redraw on other nodes", () => {
+  it("does not offer it on other nodes", () => {
     renderNode("culm", {}, { openDraw: vi.fn() });
-    expect(screen.queryByRole("button", { name: "Redraw curve freehand" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit curve on the draw pad" })).toBeNull();
   });
 });
