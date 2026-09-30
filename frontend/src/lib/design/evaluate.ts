@@ -14,9 +14,18 @@ export interface GEdge {
   targetHandle?: string | null;
 }
 
+/** Which node's output put each thing in the 3D scene — so a click on it can find its node. */
+export interface SceneOrigin {
+  elements: Record<string, string>; // element id → node
+  curves: string[]; // parallel to scene.curves
+  points: string[]; // parallel to scene.points
+  joints: Record<string, string>; // joint id → node
+}
+
 export interface EvalResult {
   outputs: Record<string, Record<string, unknown>>;
-  scene: { elements: Element[]; curves: Curve[]; points: Vec3[]; joints: Joint[] };
+  scene: { elements: Element[]; curves: Curve[]; points: Vec3[]; joints: Joint[]; origin: SceneOrigin };
+  order: string[]; // node ids in evaluation (dependency) order
   schedule: Schedule | null;
   checks: CheckResult | null;
   inventory: InventoryReport | null;
@@ -98,16 +107,18 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
   const points: Vec3[] = [];
   const joints: Joint[] = [];
   const jointsSeen = new Set<string>();
+  const origin: SceneOrigin = { elements: {}, curves: [], points: [], joints: {} };
   let schedule: Schedule | null = null;
   let checks: CheckResult | null = null;
   let inventory: InventoryReport | null = null;
 
-  const pushElements = (v: unknown) => {
+  const pushElements = (v: unknown, from: string) => {
     if (Array.isArray(v)) {
       for (const el of v as Element[]) {
         if (el?.kind && !seen.has(el.id)) {
           seen.add(el.id);
           elements.push(el);
+          origin.elements[el.id] = from;
         }
       }
     }
@@ -136,21 +147,33 @@ export function evaluateGraph(nodes: GNode[], edges: GEdge[]): EvalResult {
             if (j?.id && !jointsSeen.has(j.id)) {
               jointsSeen.add(j.id);
               joints.push(j);
+              origin.joints[j.id] = node.id;
             }
       } else if (terminal) {
-        if (port.kind === "elements") pushElements(val);
-        else if (port.kind === "curve" && val) curves.push(val as Curve);
-        else if (port.kind === "curves" && Array.isArray(val)) curves.push(...(val as Curve[]));
-        else if (port.kind === "points" && Array.isArray(val)) points.push(...(val as Vec3[]));
+        if (port.kind === "elements") pushElements(val, node.id);
+        else if (port.kind === "curve" || port.kind === "curves") {
+          // Geometry ports (array, transform, mirror) carry members as well as bare curves;
+          // members are drawn as members, never handed to the curve renderer.
+          for (const item of Array.isArray(val) ? val : val ? [val] : []) {
+            if ((item as Element)?.kind) pushElements([item], node.id);
+            else if (Array.isArray((item as Curve)?.points)) {
+              curves.push(item as Curve);
+              origin.curves.push(node.id);
+            }
+          }
+        } else if (port.kind === "points" && Array.isArray(val)) {
+          points.push(...(val as Vec3[]));
+          for (let k = 0; k < val.length; k++) origin.points.push(node.id);
+        }
       }
     }
     // Always render elements that a schedule documents.
     if (node.type === "schedule") {
       for (const e of incoming.get(node.id)!) {
-        if (e.targetHandle === "in") pushElements(outputs[e.source]?.[e.sourceHandle ?? ""]);
+        if (e.targetHandle === "in") pushElements(outputs[e.source]?.[e.sourceHandle ?? ""], e.source);
       }
     }
   }
 
-  return { outputs, scene: { elements, curves, points, joints }, schedule, checks, inventory, errors };
+  return { outputs, scene: { elements, curves, points, joints, origin }, order, schedule, checks, inventory, errors };
 }

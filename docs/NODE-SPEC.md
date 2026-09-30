@@ -36,7 +36,10 @@ span and step (a saved value outside it stretches the track rather than being cl
 Spline's points can be typed, wired in from any `points` output, or sketched with the
 **Draw** tool, which simplifies a freehand stroke into control points on any plane (an axis
 plane, or one turned, pitched and moved). They can then be dragged in the 3D view while the
-node is selected, or edited point by point on the draw pad; both write back to `pts`.
+node is selected (snapping to a grid or onto member ends, joints and other points), or edited
+point by point on the draw pad; both write back to `pts`. Clicking any geometry in the 3D view
+selects the node behind it: for a member, the Culm/Strip/Laminate node that made it (members
+carry that node's id through arrays, transforms, mirrors and splits).
 
 **The four layers** follow the whitepaper's dependency order (§6, §14): geometry is the
 foundation, the bamboo layer is thin and sits on top of it, output turns the model into a

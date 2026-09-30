@@ -49,6 +49,24 @@ describe("evaluateGraph — the proof chain", () => {
   });
 });
 
+describe("evaluateGraph — members out of a geometry node", () => {
+  it("an unconnected array of culms draws as members, not as curves", () => {
+    // arrayLinear's port is typed "curves" but carries elements here. Handing those to the
+    // curve renderer used to crash the 3D view (element objects have no `points`).
+    const r = evaluateGraph(
+      [
+        node("ln", "line", { ax: 0, ay: 0, az: 0, bx: 2, by: 0, bz: 0 }),
+        node("cu", "culm"),
+        node("ar", "arrayLinear", { count: 3 }),
+      ],
+      [edge("ln", "cu"), edge("cu", "ar")],
+    );
+    expect(r.scene.elements).toHaveLength(3);
+    expect(r.scene.curves).toHaveLength(0);
+    expect(r.scene.curves.every((c) => Array.isArray(c.points))).toBe(true);
+  });
+});
+
 describe("evaluateGraph — freeform polyline curve", () => {
   it("threads a curve through the hand-typed point list and sweeps culms along it", () => {
     const nodes = [

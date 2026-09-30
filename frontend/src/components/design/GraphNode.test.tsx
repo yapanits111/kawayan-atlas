@@ -9,19 +9,30 @@ afterEach(cleanup);
 const defaults = (type: string) =>
   Object.fromEntries(NODE_DEFS[type].params.map((p) => [p.key, p.default]));
 
-function renderNode(type: string, params: Record<string, number | string> = {}, extra: object = {}) {
+function renderNode(type: string, params: Record<string, number | string> = {}, extra: object = {}, selected = false) {
   const updateParam = vi.fn();
   const props = {
     id: "n1",
+    selected,
     data: { type, params: { ...defaults(type), ...params }, updateParam, ...extra },
   } as unknown as NodeProps;
-  render(
+  const { container } = render(
     <ReactFlowProvider>
       <GraphNode {...props} />
     </ReactFlowProvider>,
   );
-  return { updateParam };
+  return { updateParam, container };
 }
+
+describe("GraphNode selection", () => {
+  it("shows when the node is selected (from the graph or by a click in 3D)", () => {
+    const { container } = renderNode("culm", {}, {}, true);
+    expect(container.firstElementChild).toHaveClass("ring-2");
+    cleanup();
+    const plain = renderNode("culm").container;
+    expect(plain.firstElementChild).not.toHaveClass("ring-2");
+  });
+});
 
 describe("GraphNode parameters", () => {
   it("renders numeric params as sliders, not number boxes", () => {

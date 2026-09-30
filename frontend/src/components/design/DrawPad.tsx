@@ -23,6 +23,7 @@ import {
   type PlanePreset,
   type Pt2,
 } from "@/lib/design/freehand";
+import { DEFAULT_SNAP, SNAP_STEPS, type SnapSettings } from "@/lib/design/drag";
 import type { Vec3 } from "@/lib/design/types";
 import { IconHandles, IconPencil } from "@/components/icons";
 import { ParamSlider } from "./ParamSlider";
@@ -87,6 +88,8 @@ export function DrawPad({
   mode,
   wiredInput = false,
   initial,
+  snap: snapProp,
+  onSnapChange,
   onPreview,
   onCancel,
   onSubmit,
@@ -95,11 +98,20 @@ export function DrawPad({
   wiredInput?: boolean;
   /** When editing, the spline's current points and settings. */
   initial?: { pts?: Vec3[]; smooth?: number; tension?: number; closed?: string };
+  /** Grid snapping, shared with the 3D view's handles (the pad keeps its own if not given). */
+  snap?: SnapSettings;
+  onSnapChange?: (s: SnapSettings) => void;
   /** Called with the live curve and plane, for the 3D view (and live editing). */
   onPreview?: (p: DrawPreview) => void;
   onCancel: () => void;
   onSubmit: (r: DrawResult) => void;
 }) {
+  const [ownSnap, setOwnSnap] = useState<SnapSettings>(DEFAULT_SNAP);
+  const snap = snapProp ?? ownSnap;
+  const setSnap = (s: SnapSettings) => (onSnapChange ? onSnapChange(s) : setOwnSnap(s));
+  /** Snap a plane coordinate to the grid when grid snapping is on — Shift flips it for a move. */
+  const gridFor = (shift: boolean) => (v: number) =>
+    snap.grid !== shift ? Math.round(v / snap.step) * snap.step : v;
   const svgRef = useRef<SVGSVGElement>(null);
   // A stroke only replaces the curve once the pointer actually moves, so a stray click can't
   // wipe it; a dragged point keeps the offset it was grabbed at.
@@ -252,8 +264,8 @@ export function DrawPad({
         return Math.hypot(a - last[0], b - last[1]) < minStep ? s : { ...s, pts: [...s.pts, [a, b]] };
       });
     } else {
-      const snap = (v: number) => (e.shiftKey ? Math.round(v * 10) / 10 : v);
-      const na = snap(a + d.grab[0]), nb = snap(b + d.grab[1]);
+      const g = gridFor(e.shiftKey);
+      const na = g(a + d.grab[0]), nb = g(b + d.grab[1]);
       setCtrl((c) => c.map((q, i) => (i === d.index ? [na, nb, q[2]] : q)));
     }
   }
@@ -269,8 +281,10 @@ export function DrawPad({
       removePoint(idx, pts);
       return;
     }
-    const at = padToPlane(toPad(e), view);
-    const hit = insertionIndex(pts, closed, smooth, tension, at);
+    const g = gridFor(e.shiftKey);
+    const raw = padToPlane(toPad(e), view);
+    const at: Pt2 = [g(raw[0]), g(raw[1])];
+    const hit = insertionIndex(pts, closed, smooth, tension, raw);
     let index = hit.index;
     if (!closed && hit.distance * (W / size) > HIT_PX && pts.length) {
       // Well away from the curve: extend it from the nearer end.
@@ -467,7 +481,7 @@ export function DrawPad({
           <p className="mt-0.5 text-[11px] text-bamboo-500">
             {tool === "draw"
               ? "Click and drag to sketch. A new stroke replaces the curve; switch to Edit points to fine-tune it."
-              : "Drag a point to move it (Shift snaps to 10 cm). Double-click the curve to add a point, beyond an end to extend it, or on a point to remove it. Arrow keys nudge the selected point; Delete removes it."}
+              : `Drag a point to move it (${snap.grid ? `it snaps to the ${snap.step} m grid; Shift moves it freely` : `Shift snaps to the ${snap.step} m grid`}). Double-click the curve to add a point, beyond an end to extend it, or on a point to remove it. Arrow keys nudge the selected point; Delete removes it.`}
           </p>
 
           <div className="mt-3 grid gap-x-5 gap-y-4 text-xs sm:grid-cols-2 xl:grid-cols-3">
@@ -507,6 +521,29 @@ export function DrawPad({
               <ParamSlider label="origin x (m)" value={plane.origin[0]} min={-20} max={20} step={0.05} onChange={(v) => setOrigin(0, v)} />
               <ParamSlider label="origin y (m)" value={plane.origin[1]} min={-20} max={20} step={0.05} onChange={(v) => setOrigin(1, v)} />
               <ParamSlider label="origin z (m)" value={plane.origin[2]} min={-20} max={20} step={0.05} onChange={(v) => setOrigin(2, v)} />
+              <div className="flex items-center justify-between gap-2 pt-0.5 text-[11px] text-bamboo-700">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={snap.grid}
+                    onChange={(e) => setSnap({ ...snap, grid: e.target.checked })}
+                    className="accent-leaf-600"
+                  />
+                  snap points to grid
+                </label>
+                <select
+                  aria-label="Grid step"
+                  value={snap.step}
+                  onChange={(e) => setSnap({ ...snap, step: Number(e.target.value) })}
+                  className="rounded border border-bamboo-200 px-1 py-0.5 text-[11px]"
+                >
+                  {SNAP_STEPS.map((s) => (
+                    <option key={s} value={s}>
+                      {s} m
+                    </option>
+                  ))}
+                </select>
+              </div>
             </section>
 
             <section aria-label="Curve" className="space-y-1.5">

@@ -367,6 +367,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       const species = speciesId ? String(p.speciesLabel ?? speciesId) : undefined;
       const out: Element[] = curves.map((c) => ({
         id: ctx.nextId("C"), kind: "culm", curve: c, length: G.curveLength(c),
+        madeBy: ctx.nodeId,
         species,
         startDiameter: num(p, "d0"), endDiameter: num(p, "d1"), wallThickness: num(p, "wall"),
         // Taper and node data ride along from the start, so the cut-list reflects real
@@ -391,6 +392,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
       const curves = asCurves(i.in);
       const out: Element[] = curves.map((c) => ({
         id: ctx.nextId("S"), kind: "strip", curve: c, length: G.curveLength(c),
+        madeBy: ctx.nodeId,
         width: num(p, "w"), thickness: num(p, "t"),
         // A split strip is not a round culm, so ISO 22156 does not reach it (§9).
         verification: "outside-iso22156",
@@ -472,6 +474,7 @@ export const NODE_DEFS: Record<string, NodeDef> = {
         kind: "laminate",
         curve: c,
         length: G.curveLength(c),
+        madeBy: ctx.nodeId,
         width: num(p, "w"),
         thickness: ply * layers,
         layers,

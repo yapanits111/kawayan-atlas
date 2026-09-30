@@ -43,6 +43,10 @@ export interface Element {
   // connection geometry
   cutAngleStart?: number; // deg
   cutAngleEnd?: number; // deg
+  /** The node that made this member (its Culm / Strip / Laminate). Copies made further down
+   *  the graph (array, transform, mirror, internode split) keep it, so clicking any member in
+   *  3D can find the node that defines it. */
+  madeBy?: string;
 }
 
 export interface Joint {

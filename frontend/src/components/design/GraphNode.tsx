@@ -21,7 +21,7 @@ const CAT_COLOR: Record<string, string> = {
 const HEADER = 30;
 const ROW = 22;
 
-export function GraphNode({ data, id }: NodeProps) {
+export function GraphNode({ data, id, selected }: NodeProps) {
   const d = data as {
     type: string;
     params: Record<string, number | string>;
@@ -40,7 +40,8 @@ export function GraphNode({ data, id }: NodeProps) {
 
   return (
     <div
-      className="w-52 rounded-lg border bg-white text-xs shadow-sm"
+      // Selection has to show here — it is also how a click on a member in 3D points at its node.
+      className={`w-52 rounded-lg border bg-white text-xs ${selected ? "shadow-md ring-2 ring-leaf-500 ring-offset-1" : "shadow-sm"}`}
       style={{ borderColor: d.error ? "#a9623a" : "#d9cfb2" }}
     >
       <div

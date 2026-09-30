@@ -17,15 +17,18 @@ import {
 } from "@xyflow/react";
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
-import { tubeGeometry, stripGeometry, parsePoints } from "@/lib/design/geometry";
+import { tubeGeometry, stripGeometry, parsePoints, curveLength } from "@/lib/design/geometry";
 import { fitPlane, setPointInText } from "@/lib/design/freehand";
-import type { Curve, Vec3 } from "@/lib/design/types";
+import { DEFAULT_SNAP, SNAP_STEPS, type SnapSettings, type SnapTarget } from "@/lib/design/drag";
+import { descendantsOf, lineage } from "@/lib/design/lineage";
+import type { Curve, Element, Vec3 } from "@/lib/design/types";
 import { useAuth } from "@/components/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { IconPencil } from "@/components/icons";
 import { GraphNode } from "./GraphNode";
 import { NoteNode } from "./NoteNode";
-import { Viewport3D, type SplineEdit } from "./Viewport3D";
+import { Viewport3D, type Pick, type SplineEdit } from "./Viewport3D";
+import { PickTag, SnapBar } from "./ViewportOverlays";
 import { OutputPanel } from "./OutputPanel";
 import { AddNodeMenu } from "./AddNodeMenu";
 import { DrawPad, type DrawPreview, type DrawResult } from "./DrawPad";
@@ -38,6 +41,28 @@ const STORAGE_KEY = "kawayan-design-graph";
 
 type Params = Record<string, number | string>;
 const paramsOf = (n: Node | undefined) => (n?.data as { params?: Params } | undefined)?.params;
+const labelOf = (n: Node | undefined) => NODE_DEFS[(n?.data as { type?: string } | undefined)?.type ?? ""]?.label ?? n?.id ?? "";
+
+// Snap settings are a per-viewer convenience, remembered in this browser only.
+const SNAP_KEY = "kawayan-design-snap";
+function loadSnap(): SnapSettings {
+  try {
+    const s = JSON.parse(localStorage.getItem(SNAP_KEY) ?? "null");
+    if (s && typeof s.grid === "boolean" && typeof s.points === "boolean" && SNAP_STEPS.includes(s.step)) return s;
+  } catch {
+    /* unavailable or unreadable: use the defaults */
+  }
+  return DEFAULT_SNAP;
+}
+
+/** A member's size in a line, for the 3D pick tag. */
+function describeElement(el: Element): string {
+  const size =
+    el.kind === "culm"
+      ? `Ø ${Math.round(el.startDiameter ?? 0)}→${Math.round(el.endDiameter ?? 0)} mm`
+      : `${el.width} × ${el.thickness} mm`;
+  return `${el.length.toFixed(2)} m · ${size}`;
+}
 
 /** Strip React Flow's runtime fields down to the essentials we persist. */
 function serialize(nodes: Node[], edges: Edge[]) {
@@ -115,8 +140,19 @@ export function DesignEditor() {
   const drawOrig = useRef<Params | null>(null); // the edited spline's params, for Cancel
   const [ghost, setGhost] = useState<DrawPreview | null>(null); // the pad's plane + curve, in 3D
   const [dragging3d, setDragging3d] = useState(false); // a control point is being dragged in 3D
+  const [snap, setSnap] = useState<SnapSettings>(loadSnap);
+  // The last thing clicked in 3D, and the chain of nodes behind it.
+  const [picked, setPicked] = useState<{ title: string; detail: string; chain: string[]; element?: string } | null>(null);
   const nodesRef = useRef<Node[]>(nodes);
   nodesRef.current = nodes;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+    } catch {
+      /* private mode / blocked storage: the setting just isn't remembered */
+    }
+  }, [snap]);
   const rfInstance = useRef<ReactFlowInstance<Node, Edge> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   // The currently-loaded saved graph (from a share/gallery link or a prior save this
@@ -385,7 +421,37 @@ export function DesignEditor() {
     const p = id ? paramsOf(nodesRef.current.find((n) => n.id === id)) : undefined;
     drawTarget.current = id;
     drawOrig.current = p ? { ...p } : null;
+    setPicked(null);
     setDraw({ targetId: id });
+  }, []);
+
+  /** Select nodes from outside the graph (a click in 3D); `additive` keeps the current selection. */
+  const selectNodes = useCallback(
+    (ids: string[], additive = false) => {
+      const want = new Set(ids);
+      setNodes((ns) =>
+        ns.map((n) => {
+          const sel = want.has(n.id) || (additive && !!n.selected);
+          return !!n.selected === sel ? n : { ...n, selected: sel };
+        }),
+      );
+      if (!additive) setEdges((es) => (es.some((e) => e.selected) ? es.map((e) => ({ ...e, selected: false })) : es));
+    },
+    [setNodes, setEdges],
+  );
+
+  /** Pan the graph (keeping its zoom) so a node picked in 3D is in view. */
+  const revealNode = useCallback((id: string) => {
+    const inst = rfInstance.current;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const n = nodesRef.current.find((x) => x.id === id);
+    if (!inst || !rect || !n) return;
+    const w = n.measured?.width ?? 208;
+    const h = n.measured?.height ?? 120;
+    const a = inst.flowToScreenPosition(n.position);
+    const b = inst.flowToScreenPosition({ x: n.position.x + w, y: n.position.y + h });
+    if (a.x >= rect.left && a.y >= rect.top && b.x <= rect.right && b.y <= rect.bottom) return;
+    inst.setCenter(n.position.x + w / 2, n.position.y + h / 2, { zoom: inst.getZoom(), duration: 300 });
   }, []);
 
   // A dragged 3D handle rewrites only its own line of the spline's point text.
@@ -682,16 +748,130 @@ export function DesignEditor() {
   const splineEdits = useMemo<SplineEdit[]>(() => {
     if (drawOpen) return []; // the pad does the editing while it is open
     const wired = new Set(edges.filter((e) => e.targetHandle === "in").map((e) => e.target));
-    return nodes
+    const splines = nodes
       .filter((n) => n.selected && n.type !== "note" && (n.data as { type?: string }).type === "polyline" && !wired.has(n.id))
       .slice(0, 8)
-      .map((n) => {
-        const ctrl = parsePoints(String(paramsOf(n)?.pts ?? ""));
-        const fit = fitPlane(ctrl);
-        const out = result.outputs[n.id]?.out as Curve | undefined;
-        return { nodeId: n.id, ctrl, curve: out?.points ?? [], normal: ctrl.length >= 3 && fit.planar ? fit.normal : null };
+      .map((n) => ({ n, ctrl: parsePoints(String(paramsOf(n)?.pts ?? "")) }));
+    const { elements, curves, points, joints, origin } = result.scene;
+
+    // What a spline's points may snap to: member ends, joints, guide points, curve ends and
+    // other selected splines' points — never geometry built from this spline, which moves
+    // with the drag (its own culm's end would pin the point where it is).
+    const targetsFor = (id: string): SnapTarget[] => {
+      const skip = descendantsOf(id, edges);
+      skip.add(id);
+      const t: SnapTarget[] = [];
+      for (const el of elements) {
+        if (skip.has(origin.elements[el.id]) || (el.madeBy && skip.has(el.madeBy))) continue;
+        const pts = el.curve.points;
+        if (pts.length) t.push({ p: pts[0], label: `${el.id} start` }, { p: pts[pts.length - 1], label: `${el.id} end` });
+      }
+      for (const j of joints) if (!skip.has(origin.joints[j.id])) t.push({ p: j.position, label: `joint ${j.id}` });
+      points.forEach((p, i) => {
+        if (!skip.has(origin.points[i])) t.push({ p, label: "point" });
       });
+      curves.forEach((c, i) => {
+        if (skip.has(origin.curves[i]) || !c.points.length) return;
+        t.push({ p: c.points[0], label: "curve end" }, { p: c.points[c.points.length - 1], label: "curve end" });
+      });
+      for (const s of splines)
+        if (!skip.has(s.n.id)) s.ctrl.forEach((p, k) => t.push({ p, label: `point ${k + 1} of ${labelOf(s.n)}` }));
+      return t;
+    };
+
+    return splines.map(({ n, ctrl }) => {
+      const fit = fitPlane(ctrl);
+      const out = result.outputs[n.id]?.out as Curve | undefined;
+      return {
+        nodeId: n.id,
+        ctrl,
+        curve: out?.points ?? [],
+        normal: ctrl.length >= 3 && fit.planar ? fit.normal : null,
+        targets: targetsFor(n.id),
+      };
+    });
   }, [nodes, edges, result, drawOpen]);
+
+  // Light up in 3D what the selected node(s) produce — the other half of picking: select a
+  // node in the graph and see its members; click a member and see its node.
+  const selectedKey = nodes
+    .filter((n) => n.selected)
+    .map((n) => n.id)
+    .join("|");
+  const highlight = useMemo(() => {
+    const out = { elements: new Set<string>(), curves: new Set<number>() };
+    if (!selectedKey) return out;
+    const sel = new Set(selectedKey.split("|"));
+    const cache = new Map<string, boolean>();
+    const touches = (producer: string | undefined, via: string | null) => {
+      if (!producer) return false;
+      const key = `${producer}|${via ?? ""}`;
+      if (!cache.has(key)) cache.set(key, lineage(producer, via, edges, result.order).some((id) => sel.has(id)));
+      return cache.get(key)!;
+    };
+    for (const el of result.scene.elements)
+      if (touches(result.scene.origin.elements[el.id], el.madeBy ?? null)) out.elements.add(el.id);
+    result.scene.curves.forEach((_, i) => {
+      if (touches(result.scene.origin.curves[i], null)) out.curves.add(i);
+    });
+    return out;
+  }, [selectedKey, result, edges]);
+
+  /** A click in 3D selects the node behind what was clicked — for a member, the node that
+   *  made it (its Culm, Strip…), even when an array or transform put this copy in place — and
+   *  lists the chain of nodes behind it, so any of them is one click away. Empty space clears
+   *  the selection. */
+  const onPick = useCallback(
+    (pick: Pick | null, additive: boolean) => {
+      if (!pick) {
+        if (!additive) {
+          selectNodes([]);
+          setPicked(null);
+        }
+        return;
+      }
+      const { scene } = result;
+      let producer: string | undefined;
+      let via: string | null = null;
+      let title = "";
+      let detail = "";
+      if (pick.kind === "element") {
+        const el = scene.elements.find((x) => x.id === pick.id);
+        if (!el) return;
+        producer = scene.origin.elements[el.id];
+        via = el.madeBy && nodesRef.current.some((n) => n.id === el.madeBy) ? el.madeBy : null;
+        title = `${el.id} · ${el.kind}`;
+        detail = describeElement(el);
+      } else if (pick.kind === "curve") {
+        producer = scene.origin.curves[pick.index];
+        title = "Curve";
+        detail = `${curveLength(scene.curves[pick.index]).toFixed(2)} m`;
+      } else if (pick.kind === "point") {
+        producer = scene.origin.points[pick.index];
+        title = "Point";
+        detail = scene.points[pick.index].map((v) => v.toFixed(2)).join(", ");
+      } else {
+        const j = scene.joints.find((x) => x.id === pick.id);
+        producer = scene.origin.joints[pick.id];
+        title = `Joint ${pick.id}`;
+        detail = j ? `${j.typeLabel ?? "untyped"} · ${j.count} ends` : "";
+      }
+      if (!producer) return;
+      const target = via ?? producer;
+      selectNodes([target], additive);
+      revealNode(target);
+      setPicked({
+        title,
+        detail,
+        chain: lineage(producer, via, edges, result.order),
+        element: pick.kind === "element" ? pick.id : undefined,
+      });
+    },
+    [result, edges, selectNodes, revealNode],
+  );
+  // The tag belongs to the selection: once none of its nodes is selected, it has gone stale.
+  const selectedSet = useMemo(() => new Set(selectedKey ? selectedKey.split("|") : []), [selectedKey]);
+  const pickLive = picked && !drawOpen && picked.chain.some((id) => selectedSet.has(id)) ? picked : null;
 
   function exportGLB() {
     const group = new THREE.Group();
@@ -864,7 +1044,8 @@ export function DesignEditor() {
                   <li><strong>Ctrl/⌘ C</strong> / <strong>V</strong> — copy / paste selection</li>
                   <li><strong>Del</strong> / <strong>Backspace</strong> — remove selection</li>
                   <li><strong>Ctrl/⌘ Z</strong> — undo · <strong>Ctrl/⌘ ⇧ Z</strong> — redo</li>
-                  <li>Select a <strong>Spline</strong> node to drag its points in the 3D view (<strong>Shift</strong>: straight up/down)</li>
+                  <li><strong>Click</strong> a member or curve in 3D to select its node (<strong>Shift</strong>-click adds; empty space clears)</li>
+                  <li>Select a <strong>Spline</strong> node to drag its points in the 3D view (<strong>Shift</strong>: straight up/down; snap to grid or points from the 3D view&apos;s Snap bar)</li>
                 </ul>
               </div>
             )}
@@ -942,6 +1123,8 @@ export function DesignEditor() {
                   ? { pts: parsePoints(String(p.pts ?? "")), smooth: Number(p.smooth), tension: Number(p.tension), closed: String(p.closed) }
                   : undefined;
               })()}
+              snap={snap}
+              onSnapChange={setSnap}
               onPreview={onDrawPreview}
               onCancel={cancelDraw}
               onSubmit={applyDrawing}
@@ -950,7 +1133,7 @@ export function DesignEditor() {
         </div>
 
         <div className="grid min-h-0 grid-rows-[1.4fr_1fr]">
-          <div className="min-h-0 bg-bamboo-100">
+          <div className="relative min-h-0 bg-bamboo-100">
             <ErrorBoundary label="The 3D view hit an error rendering this design.">
               <Viewport3D
                 elements={result.scene.elements}
@@ -959,10 +1142,29 @@ export function DesignEditor() {
                 joints={result.scene.joints}
                 ghost={ghost}
                 edits={splineEdits}
+                snap={snap}
+                highlight={highlight}
+                focus={pickLive?.element ?? null}
+                onPick={drawOpen ? undefined : onPick}
                 onMovePoint={movePoint}
                 onDragging={onDragging}
               />
             </ErrorBoundary>
+            {splineEdits.length > 0 && <SnapBar snap={snap} onChange={setSnap} />}
+            {pickLive && (
+              <PickTag
+                title={pickLive.title}
+                detail={pickLive.detail}
+                chain={pickLive.chain.filter((id) => nodes.some((n) => n.id === id))}
+                labelOf={(id) => labelOf(nodes.find((n) => n.id === id))}
+                isSelected={(id) => selectedSet.has(id)}
+                onSelect={(id) => {
+                  selectNodes([id]);
+                  revealNode(id);
+                }}
+                onClose={() => setPicked(null)}
+              />
+            )}
           </div>
           <div className="min-h-0 border-t border-bamboo-200 bg-white">
             <OutputPanel schedule={result.schedule} checks={result.checks} inventory={result.inventory} />

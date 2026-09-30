@@ -91,7 +91,7 @@ describe("DrawPad — drawing", () => {
     render(<DrawPad mode="new" onCancel={vi.fn()} onSubmit={onSubmit} />);
     drawArch();
     setSlider("tension", 0.5);
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByLabelText("closed loop"));
     fireEvent.change(screen.getByDisplayValue("Culm (round bamboo)"), { target: { value: "strip" } });
     fireEvent.click(screen.getByRole("button", { name: "Create spline node" }));
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ tension: 0.5, closed: "yes", sweep: "strip" });
@@ -228,6 +228,27 @@ describe("DrawPad — editing an existing spline", () => {
     expect(pts.map((p) => p[0])).not.toContain(1.5);
   });
 
+  it("snaps dragged and added points to the grid when snapping is on; Shift moves freely", () => {
+    const onSnapChange = vi.fn();
+    const { onSubmit, apply } = renderEdit({ snap: { grid: true, step: 0.25, points: true }, onSnapChange });
+    fireEvent.pointerDown(screen.getByLabelText("Point 3"), { ...px(0, 1.9), pointerId: 1 });
+    fireEvent.pointerMove(pad(), { ...px(0.37, 2.61), pointerId: 1 });
+    fireEvent.pointerUp(pad(), px(0.37, 2.61));
+    fireEvent.pointerDown(screen.getByLabelText("Point 4"), { ...px(1.5, 1.4), pointerId: 1 });
+    fireEvent.pointerMove(pad(), { ...px(1.63, 1.21), shiftKey: true, pointerId: 1 });
+    fireEvent.pointerUp(pad(), px(1.63, 1.21));
+    fireEvent.doubleClick(pad(), px(-2.36, 0.63)); // on the curve, between points 1 and 2
+    apply();
+    const pts = submitted(onSubmit);
+    expect(pts[3]).toEqual([0.25, 2.5, 0]); // (0.37, 2.61) → the 0.25 m grid
+    expect(pts[4][0]).toBeCloseTo(1.63, 2); // Shift: exactly where it was put
+    expect(pts[4][1]).toBeCloseTo(1.21, 2);
+    expect(pts[1]).toEqual([-2.25, 0.75, 0]); // the added point landed on the grid too
+    // The toggle reports changes back (the setting is shared with the 3D view).
+    fireEvent.click(screen.getByLabelText("snap points to grid"));
+    expect(onSnapChange).toHaveBeenCalledWith({ grid: false, step: 0.25, points: true });
+  });
+
   it("won't remove points below the two a spline needs", () => {
     renderEdit({ initial: { pts: [[0, 0, 0], [2, 1, 0]] } });
     fireEvent.pointerDown(screen.getByLabelText("Point 1"), px(-1, 0));
@@ -266,7 +287,7 @@ describe("DrawPad — editing an existing spline", () => {
   it("starts from the node's settings, ignoring missing (NaN) ones from older graphs", () => {
     renderEdit({ initial: { pts: ARCH, smooth: 20, tension: 0.4, closed: "yes" } });
     expect(slider("tension")).toHaveValue("0.4");
-    expect(screen.getByRole("checkbox")).toBeChecked();
+    expect(screen.getByLabelText("closed loop")).toBeChecked();
     cleanup();
     renderEdit({ initial: { pts: ARCH, smooth: NaN, tension: NaN } });
     expect(slider("tension")).toHaveValue("0");

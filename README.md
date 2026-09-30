@@ -51,9 +51,17 @@ diagonal arch, a second arch further back, or a roof-slope curve is one sketch a
 closed/open and its points are all on the node), and its points can be reshaped by hand two
 ways. **Select a Spline node and drag its points in the 3D view** — a flat curve's points
 slide in its own plane, Shift moves one straight up or down, and the model and cut-list
-follow as you drag. Or open it on the **pad** (the pencil on the node): drag points, add one
-by double-clicking the curve, extend past an end, remove one, nudge with the arrow keys, move
-the whole plane, or redraw — live, with Cancel putting everything back.
+follow as you drag. **Snapping** (the 3D view's Snap bar) lands a dragged point on a grid laid
+out in the curve's plane, or right onto a nearby member end, joint or control point — how
+you make two members meet. Or open it on the **pad** (the pencil on the node): drag points, add
+one by double-clicking the curve, extend past an end, remove one, nudge with the arrow keys,
+move the whole plane, or redraw — live, with Cancel putting everything back.
+
+**Click the model to find its node:** clicking a culm, strip, curve, point or joint in 3D
+selects the node behind it — for a member, the node that made it (its Culm or Strip), even
+when an array or transform placed that copy — and pans the graph to it. A tag lists the whole
+chain behind what you clicked (e.g. Spline › Divide › Culm › Array), each one click away, and
+whatever the selected node produces lights up in 3D.
 
 **Editor:** every numeric parameter is a **slider** with a live readout, so the model and the
 cut-list update as you drag. Plus live dependency-ordered re-evaluation, autosave + shareable
@@ -193,9 +201,10 @@ cd frontend && npx tsc --noEmit && npm run build
 The Design Lab's core is unit-tested with [Vitest](https://vitest.dev/): the geometry
 kernel (`geometry.ts`), the dependency-ordered evaluation engine (`evaluate.ts`), the
 pole-inventory reconciliation (`inventory.ts`), the drawing-plane and point-editing maths
-(`freehand.ts`), 3D point dragging (`drag.ts`), and the node registry — plus component tests
-(jsdom + Testing Library) for the node UI and the draw pad. Run `npm run test:watch` for
-watch mode.
+(`freehand.ts`), 3D point dragging and snapping (`drag.ts`), tracing 3D geometry back to its
+nodes (`lineage.ts`), and the node registry — plus component tests (jsdom + Testing Library)
+for the node UI, the draw pad and the 3D view's overlays. Run `npm run test:watch` for watch
+mode.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the backend tests plus the
 frontend type-check and build on every push / PR (assumes `kawayan-atlas/` is the repo root).
